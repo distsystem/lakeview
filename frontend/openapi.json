@@ -1,0 +1,527 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "lakeview",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/datasets": {
+      "get": {
+        "summary": "Get Datasets",
+        "operationId": "get_datasets_api_datasets_get",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Prefix"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/d/{db_path}/schema": {
+      "get": {
+        "summary": "Get Schema",
+        "operationId": "get_schema_api_d__db_path__schema_get",
+        "parameters": [
+          {
+            "name": "db_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Db Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/d/{db_path}/rows": {
+      "get": {
+        "summary": "Get Rows",
+        "operationId": "get_rows_api_d__db_path__rows_get",
+        "parameters": [
+          {
+            "name": "db_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Db Path"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RowListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/d/{db_path}/runs/{key}": {
+      "get": {
+        "summary": "Get Run",
+        "operationId": "get_run_api_d__db_path__runs__key__get",
+        "parameters": [
+          {
+            "name": "db_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Db Path"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ColumnInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "nullable": {
+            "type": "boolean",
+            "title": "Nullable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "nullable"
+        ],
+        "title": "ColumnInfo"
+      },
+      "DatasetEntry": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "kind"
+        ],
+        "title": "DatasetEntry"
+      },
+      "DatasetListResponse": {
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "title": "Prefix"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetEntry"
+            },
+            "type": "array",
+            "title": "Datasets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prefix",
+          "datasets"
+        ],
+        "title": "DatasetListResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "RowListResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowSummary"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/Stats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "rows",
+          "stats"
+        ],
+        "title": "RowListResponse"
+      },
+      "RowSummary": {
+        "properties": {
+          "row_offset": {
+            "type": "integer",
+            "title": "Row Offset"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "correct": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_offset"
+        ],
+        "title": "RowSummary"
+      },
+      "RunDetailResponse": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/RowSummary"
+          },
+          "messages": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "messages"
+        ],
+        "title": "RunDetailResponse"
+      },
+      "SchemaResponse": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnInfo"
+            },
+            "type": "array",
+            "title": "Columns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "columns"
+        ],
+        "title": "SchemaResponse"
+      },
+      "Stats": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "ok": {
+            "type": "integer",
+            "title": "Ok"
+          },
+          "wrong": {
+            "type": "integer",
+            "title": "Wrong"
+          },
+          "error": {
+            "type": "integer",
+            "title": "Error"
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          },
+          "accuracy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "ok",
+          "wrong",
+          "error",
+          "pending"
+        ],
+        "title": "Stats"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

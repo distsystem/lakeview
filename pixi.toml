@@ -1,0 +1,19 @@
+[workspace]
+channels = ["https://repo.prefix.dev/meta-forge", "conda-forge"]
+name = "lakeview"
+platforms = ["linux-64"]
+version = "0.1.0"
+preview = ["pixi-build"]
+
+[tasks]
+dev = "uvicorn lakeview.app:app --host 0.0.0.0 --port 8766 --reload"
+
+[dependencies]
+python = "=3.12"
+lancedb = "*"
+uvicorn = "*"
+hatchling = "*"
+
+[pypi-dependencies]
+lakeview = { path = ".", editable = true }
+fastapi = "*"
