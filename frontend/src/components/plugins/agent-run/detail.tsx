@@ -1,4 +1,4 @@
-import { useRunDetail } from "@/hooks/use-run-detail";
+import { usePluginDetail } from "@/hooks/use-plugin-detail";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import {
@@ -12,11 +12,8 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-// Convert \(...\) → $...$ and \[...\] → $$...$$ so remark-math can parse them.
 function normalizeMath(text: string): string {
-  // Display math: \[...\]
   text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_m, inner) => `$$${inner}$$`);
-  // Inline math: \(...\)
   text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_m, inner) => `$${inner}$`);
   return text;
 }
@@ -28,14 +25,15 @@ function PartView({ part }: { part: Record<string, unknown> }) {
   const content = (part.content as string) ?? "";
 
   if (kind === "thinking") {
-    const len = content.length;
     return (
       <Card className="border-dashed">
         <Collapsible>
           <CardHeader className="py-2 px-3">
             <CollapsibleTrigger className="flex items-center gap-2 text-xs cursor-pointer">
               <Badge variant="outline">THINKING</Badge>
-              <span className="text-muted-foreground">{len.toLocaleString()} chars</span>
+              <span className="text-muted-foreground">
+                {content.length.toLocaleString()} chars
+              </span>
             </CollapsibleTrigger>
           </CardHeader>
           <CollapsibleContent>
@@ -61,7 +59,9 @@ function PartView({ part }: { part: Record<string, unknown> }) {
         code = args;
       }
     } else if (typeof args === "object" && args) {
-      code = (args as Record<string, unknown>).code as string ?? JSON.stringify(args, null, 2);
+      code =
+        (args as Record<string, unknown>).code as string ??
+        JSON.stringify(args, null, 2);
     }
     return (
       <Card>
@@ -81,9 +81,7 @@ function PartView({ part }: { part: Record<string, unknown> }) {
     return (
       <Card>
         <CardHeader className="py-2 px-3">
-          <Badge variant="secondary">
-            TOOL RETURN · {part.tool_name as string}
-          </Badge>
+          <Badge variant="secondary">TOOL RETURN · {part.tool_name as string}</Badge>
         </CardHeader>
         <CardContent className="pt-0 px-3 pb-3">
           <pre className="whitespace-pre-wrap text-xs max-h-96 overflow-y-auto">
@@ -173,14 +171,14 @@ function MessageView({
 
 // -- Run detail page --
 
-export function RunDetail({
+export function AgentRunDetail({
   dbPath,
   runKey,
 }: {
   dbPath: string;
   runKey: string;
 }) {
-  const { data, isLoading, error } = useRunDetail(dbPath, runKey);
+  const { data, isLoading, error } = usePluginDetail(dbPath, runKey);
 
   if (isLoading)
     return (
@@ -195,9 +193,14 @@ export function RunDetail({
       </div>
     );
 
-  const { row, messages } = data;
+  const { row, messages } = data.data as {
+    row: Record<string, unknown>;
+    messages: Record<string, unknown>[];
+  };
   const metadata = row.metadata as Record<string, unknown> | null;
   const output = row.output as Record<string, unknown> | null;
+  const correct = row.correct as boolean | null;
+  const hasError = !!row.error;
 
   return (
     <div className="flex-1 overflow-y-auto p-6 h-full">
@@ -212,20 +215,20 @@ export function RunDetail({
           <CardContent className="py-3 flex items-center gap-2 flex-wrap">
             <Badge
               variant={
-                row.error
+                hasError
                   ? "outline"
-                  : row.correct === true
+                  : correct === true
                     ? "default"
-                    : row.correct === false
+                    : correct === false
                       ? "destructive"
                       : "secondary"
               }
             >
-              {row.error
+              {hasError
                 ? "ERROR"
-                : row.correct === true
+                : correct === true
                   ? "CORRECT"
-                  : row.correct === false
+                  : correct === false
                     ? "WRONG"
                     : "PENDING"}
             </Badge>
@@ -249,8 +252,8 @@ export function RunDetail({
               <span
                 className={cn(
                   "font-mono font-semibold",
-                  row.correct === true && "text-green-500",
-                  row.correct === false && "text-red-500",
+                  correct === true && "text-green-500",
+                  correct === false && "text-red-500",
                 )}
               >
                 {output?.answer != null ? String(output.answer) : "—"}
@@ -260,22 +263,10 @@ export function RunDetail({
         </Card>
         <div className="space-y-2">
           {messages.map((msg, i) => (
-            <MessageView
-              key={i}
-              msg={msg as Record<string, unknown>}
-              defaultOpen={i === 0}
-            />
+            <MessageView key={i} msg={msg} defaultOpen={i === 0} />
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-export function EmptyMain() {
-  return (
-    <div className="flex-1 flex items-center justify-center h-full">
-      <p className="text-muted-foreground text-sm">Select a run from the sidebar</p>
     </div>
   );
 }

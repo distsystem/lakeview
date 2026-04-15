@@ -1,13 +1,21 @@
 import { Link, useSearchParams } from "react-router";
-import type { RowSummary } from "@/api/client";
-import { useRows } from "@/hooks/use-rows";
+import { usePluginView } from "@/hooks/use-plugin-view";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatsBar } from "@/components/stats-bar";
+import { AgentRunStatsBar } from "@/components/plugins/agent-run/stats-bar";
 import { cn } from "@/lib/utils";
 
-function statusIcon(row: RowSummary) {
+interface RowData {
+  row_offset: number;
+  session_id?: string | null;
+  correct?: boolean | null;
+  error?: string | null;
+  output?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+function statusIcon(row: RowData) {
   if (row.error) return <span className="text-yellow-500 font-bold">!</span>;
   if (row.correct === true) return <span className="text-green-500">ok</span>;
   if (row.correct === false) return <span className="text-red-500">x</span>;
@@ -29,14 +37,14 @@ function RunCard({
   dbPath,
   selected,
 }: {
-  row: RowSummary;
+  row: RowData;
   dbPath: string;
   selected: boolean;
 }) {
   const label = uuid7Time(row.session_id) || `#${row.row_offset}`;
-  const slug = (row.metadata as Record<string, unknown>)?.slug as string | undefined;
-  const expected = (row.metadata as Record<string, unknown>)?.answer;
-  const modelAns = (row.output as Record<string, unknown>)?.answer;
+  const slug = row.metadata?.slug as string | undefined;
+  const expected = row.metadata?.answer;
+  const modelAns = row.output?.answer;
 
   return (
     <Link
@@ -57,7 +65,9 @@ function RunCard({
           </span>
           {(expected != null || modelAns != null) && (
             <span className="shrink-0 font-mono text-[11px]">
-              <span className="opacity-70">{expected != null ? String(expected) : "—"}</span>
+              <span className="opacity-70">
+                {expected != null ? String(expected) : "—"}
+              </span>
               <span className="opacity-40 mx-0.5">→</span>
               <span
                 className={cn(
@@ -77,7 +87,7 @@ function RunCard({
 
 const STATUSES = ["all", "ok", "wrong", "error", "pending"] as const;
 
-export function RunSidebar({
+export function AgentRunSidebar({
   dbPath,
   selectedKey,
 }: {
@@ -86,11 +96,11 @@ export function RunSidebar({
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get("status") ?? "all";
-  const { data, isLoading } = useRows(dbPath, 0, 200, status);
+  const { data, isLoading } = usePluginView(dbPath, 0, 200, status);
 
   return (
     <div className="w-80 shrink-0 border-r flex flex-col h-full">
-      {data && <StatsBar stats={data.stats} />}
+      {data?.stats && <AgentRunStatsBar stats={data.stats} />}
       <Tabs
         value={status}
         onValueChange={(v) => setSearchParams({ status: v })}
@@ -109,17 +119,20 @@ export function RunSidebar({
           {isLoading && (
             <p className="text-xs text-muted-foreground p-2">Loading...</p>
           )}
-          {data?.rows.map((row) => (
-            <RunCard
-              key={row.session_id ?? row.row_offset}
-              row={row}
-              dbPath={dbPath}
-              selected={
-                selectedKey === row.session_id ||
-                selectedKey === String(row.row_offset)
-              }
-            />
-          ))}
+          {data?.rows.map((row) => {
+            const r = row as unknown as RowData;
+            return (
+              <RunCard
+                key={r.session_id ?? r.row_offset}
+                row={r}
+                dbPath={dbPath}
+                selected={
+                  selectedKey === r.session_id ||
+                  selectedKey === String(r.row_offset)
+                }
+              />
+            );
+          })}
         </div>
       </ScrollArea>
     </div>

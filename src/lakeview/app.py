@@ -1,23 +1,18 @@
-"""FastAPI app — typed REST API for Lance datasets.
+"""FastAPI app — generic datalake frontend with plugin-enriched views.
 
 Run:
     pixi run dev
     # or:
     uvicorn lakeview.app:app --host 0.0.0.0 --port 8766 --reload
-
-Sample queries against sample-data/ (symlinked from agent/output):
-    curl localhost:8766/api/datasets?prefix=sample-data
-    curl localhost:8766/api/d/sample-data/kaggle.lance/rows?limit=5
-    curl localhost:8766/api/d/sample-data/kaggle.lance/runs/0
-    curl localhost:8766/api/d/sample-data/kaggle.lance/schema
 """
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from lakeview import lance_io, models
+from lakeview import formats, models, storage
+from lakeview.plugins import registry
 
-app = FastAPI(title="lakeview", version="0.1.0")
+app = FastAPI(title="lakeview", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,47 +21,71 @@ app.add_middleware(
 )
 
 
+def _open_or_404(db_path: str) -> tuple[formats.base.DatasetReader, str]:
+    """Resolve path, detect format, open dataset — or raise 404."""
+    db_path = db_path.rstrip("/")
+    # Detect kind from storage layer
+    resolved = storage.local.resolve_local(db_path)
+    if resolved:
+        kind = storage.local.detect_format(resolved)
+    else:
+        kind = "lance"  # S3 paths assumed lance for now
+    reader = formats.open_dataset(resolved or db_path, kind)
+    if reader is None:
+        raise HTTPException(404, f"dataset not found: {db_path}")
+    return reader, kind
+
+
 # -- Dataset browsing --
 
 
 @app.get("/api/datasets")
 def get_datasets(prefix: str = "") -> models.DatasetListResponse:
-    resolved, raw = lance_io.list_datasets(prefix)
+    resolved, entries = storage.list_entries(prefix)
     datasets = []
-    for d in raw:
-        kind = d.get("kind", "directory")
-        row_count = None
-        if kind == "lance":
-            ds = lance_io.open_dataset(d["path"])
-            row_count = ds.count_rows() if ds else None
+    for e in entries:
+        row_count = e.row_count
+        if e.kind == "lance" and row_count is None:
+            reader = formats.open_dataset(e.path, e.kind)
+            row_count = reader.count_rows() if reader else None
         datasets.append(
             models.DatasetEntry(
-                name=d["name"],
-                path=d["path"],
-                kind=kind,
-                row_count=row_count,
+                name=e.name, path=e.path, kind=e.kind, row_count=row_count,
             )
         )
     return models.DatasetListResponse(prefix=resolved, datasets=datasets)
 
 
+# -- Dataset info (with plugin detection) --
+
+
+@app.get("/api/d/{db_path:path}/info")
+def get_info(db_path: str) -> models.DatasetInfoResponse:
+    reader, _ = _open_or_404(db_path)
+    plugin = registry.detect_plugin(reader.schema)
+    columns = [
+        models.ColumnInfo(name=f.name, type=str(f.type), nullable=f.nullable)
+        for f in reader.schema
+    ]
+    return models.DatasetInfoResponse(
+        row_count=reader.count_rows(),
+        columns=columns,
+        plugin=plugin.name if plugin else None,
+        filters=plugin.available_filters() if plugin else [],
+    )
+
+
 @app.get("/api/d/{db_path:path}/schema")
 def get_schema(db_path: str) -> models.SchemaResponse:
-    ds = lance_io.open_dataset(db_path.rstrip("/"))
-    if ds is None:
-        raise HTTPException(404, f"dataset not found: {db_path}")
+    reader, _ = _open_or_404(db_path)
     columns = [
-        models.ColumnInfo(
-            name=f.name,
-            type=str(f.type),
-            nullable=f.nullable,
-        )
-        for f in ds.schema
+        models.ColumnInfo(name=f.name, type=str(f.type), nullable=f.nullable)
+        for f in reader.schema
     ]
     return models.SchemaResponse(columns=columns)
 
 
-# -- Row listing --
+# -- Generic rows --
 
 
 @app.get("/api/d/{db_path:path}/rows")
@@ -74,59 +93,75 @@ def get_rows(
     db_path: str,
     offset: int = 0,
     limit: int = Query(default=50, le=200),
-    status: str = "all",
-) -> models.RowListResponse:
-    db_path = db_path.rstrip("/")
-    ds = lance_io.open_dataset(db_path)
-    if ds is None:
-        raise HTTPException(404, f"dataset not found: {db_path}")
+) -> models.GenericRowListResponse:
+    reader, _ = _open_or_404(db_path)
+    total = reader.count_rows()
+    rows = reader.scan(offset, limit)
+    return models.GenericRowListResponse(
+        total=total, offset=offset, limit=limit, rows=rows,
+    )
 
-    all_rows = lance_io.list_all_rows(ds, db_path)
-    stats = lance_io.compute_stats(all_rows)
-    filtered = lance_io.filter_by_status(all_rows, status)
 
+@app.get("/api/d/{db_path:path}/row/{offset}")
+def get_row(db_path: str, offset: int) -> dict:
+    reader, _ = _open_or_404(db_path)
+    row = reader.get_row(offset)
+    if row is None:
+        raise HTTPException(404, f"row not found at offset {offset}")
+    return row
+
+
+# -- Plugin-enriched views --
+
+
+@app.get("/api/d/{db_path:path}/view")
+def get_view(
+    db_path: str,
+    offset: int = 0,
+    limit: int = Query(default=50, le=200),
+    filter: str = "all",
+) -> models.PluginViewResponse:
+    reader, _ = _open_or_404(db_path)
+    plugin = registry.detect_plugin(reader.schema)
+    if not plugin:
+        raise HTTPException(404, "no plugin detected for this schema")
+
+    # Load all rows (excluding heavy columns) for filtering + stats
+    exclude = {"messages"}
+    cols = [f.name for f in reader.schema if f.name not in exclude]
+    all_rows = reader.scan(0, reader.count_rows(), columns=cols)
+    for i, r in enumerate(all_rows):
+        r["row_offset"] = i
+
+    stats = plugin.summarize_rows(all_rows)
+    filtered = plugin.filter_rows(all_rows, filter)
     page = filtered[offset : offset + limit]
-    rows = [
-        models.RowSummary(
-            row_offset=r.get("row_offset", 0),
-            session_id=r.get("session_id"),
-            output=r.get("output"),
-            error=r.get("error"),
-            metadata=r.get("metadata"),
-            correct=r.get("correct"),
-        )
-        for r in page
-    ]
-    return models.RowListResponse(
+    sidebar_rows = [plugin.sidebar_row(r) | {"row_offset": r["row_offset"]} for r in page]
+
+    return models.PluginViewResponse(
         total=len(filtered),
         offset=offset,
         limit=limit,
-        rows=rows,
-        stats=models.Stats(**stats),
+        rows=sidebar_rows,
+        stats=stats,
+        plugin=plugin.name,
     )
 
 
-# -- Run detail --
+@app.get("/api/d/{db_path:path}/view/{key}")
+def get_view_detail(db_path: str, key: str) -> models.PluginDetailResponse:
+    reader, _ = _open_or_404(db_path)
+    plugin = registry.detect_plugin(reader.schema)
+    if not plugin:
+        raise HTTPException(404, "no plugin detected for this schema")
 
-
-@app.get("/api/d/{db_path:path}/runs/{key}")
-def get_run(db_path: str, key: str) -> models.RunDetailResponse:
-    db_path = db_path.rstrip("/")
-    ds = lance_io.open_dataset(db_path)
-    if ds is None:
-        raise HTTPException(404, f"dataset not found: {db_path}")
-
-    loaded = lance_io.load_run(ds, key, db_path)
-    if loaded is None:
+    # Resolve key (plugin-specific: numeric offset or session_id)
+    offset = getattr(plugin, "resolve_key", lambda r, k: int(k) if k.isdigit() else None)(reader, key)
+    if offset is None:
         raise HTTPException(404, f"run not found: {key}")
 
-    row_dict, messages = loaded
-    row = models.RowSummary(
-        row_offset=0,
-        session_id=row_dict.get("session_id"),
-        output=row_dict.get("output"),
-        error=row_dict.get("error"),
-        metadata=row_dict.get("metadata"),
-        correct=row_dict.get("correct"),
-    )
-    return models.RunDetailResponse(row=row, messages=messages)
+    data = plugin.detail(reader, offset)
+    if data is None:
+        raise HTTPException(404, f"run not found at offset {offset}")
+
+    return models.PluginDetailResponse(plugin=plugin.name, data=data)

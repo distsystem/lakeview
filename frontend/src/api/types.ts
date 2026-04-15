@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/d/{db_path}/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Info */
+        get: operations["get_info_api_d__db_path__info_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/d/{db_path}/schema": {
         parameters: {
             query?: never;
@@ -55,15 +72,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/d/{db_path}/runs/{key}": {
+    "/api/d/{db_path}/row/{offset}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Run */
-        get: operations["get_run_api_d__db_path__runs__key__get"];
+        /** Get Row */
+        get: operations["get_row_api_d__db_path__row__offset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/d/{db_path}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get View */
+        get: operations["get_view_api_d__db_path__view_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/d/{db_path}/view/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get View Detail */
+        get: operations["get_view_detail_api_d__db_path__view__key__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -96,6 +147,20 @@ export interface components {
             /** Row Count */
             row_count?: number | null;
         };
+        /** DatasetInfoResponse */
+        DatasetInfoResponse: {
+            /** Row Count */
+            row_count: number;
+            /** Columns */
+            columns: components["schemas"]["ColumnInfo"][];
+            /** Plugin */
+            plugin?: string | null;
+            /**
+             * Filters
+             * @default []
+             */
+            filters: string[];
+        };
         /** DatasetListResponse */
         DatasetListResponse: {
             /** Prefix */
@@ -103,13 +168,8 @@ export interface components {
             /** Datasets */
             datasets: components["schemas"]["DatasetEntry"][];
         };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
-        /** RowListResponse */
-        RowListResponse: {
+        /** GenericRowListResponse */
+        GenericRowListResponse: {
             /** Total */
             total: number;
             /** Offset */
@@ -117,55 +177,47 @@ export interface components {
             /** Limit */
             limit: number;
             /** Rows */
-            rows: components["schemas"]["RowSummary"][];
-            stats: components["schemas"]["Stats"];
-        };
-        /** RowSummary */
-        RowSummary: {
-            /** Row Offset */
-            row_offset: number;
-            /** Session Id */
-            session_id?: string | null;
-            /** Output */
-            output?: {
-                [key: string]: unknown;
-            } | null;
-            /** Error */
-            error?: string | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            } | null;
-            /** Correct */
-            correct?: boolean | null;
-        };
-        /** RunDetailResponse */
-        RunDetailResponse: {
-            row: components["schemas"]["RowSummary"];
-            /** Messages */
-            messages: {
+            rows: {
                 [key: string]: unknown;
             }[];
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /** PluginDetailResponse */
+        PluginDetailResponse: {
+            /** Plugin */
+            plugin: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+        };
+        /** PluginViewResponse */
+        PluginViewResponse: {
+            /** Total */
+            total: number;
+            /** Offset */
+            offset: number;
+            /** Limit */
+            limit: number;
+            /** Rows */
+            rows: {
+                [key: string]: unknown;
+            }[];
+            /** Stats */
+            stats?: {
+                [key: string]: unknown;
+            } | null;
+            /** Plugin */
+            plugin: string;
         };
         /** SchemaResponse */
         SchemaResponse: {
             /** Columns */
             columns: components["schemas"]["ColumnInfo"][];
-        };
-        /** Stats */
-        Stats: {
-            /** Total */
-            total: number;
-            /** Ok */
-            ok: number;
-            /** Wrong */
-            wrong: number;
-            /** Error */
-            error: number;
-            /** Pending */
-            pending: number;
-            /** Accuracy */
-            accuracy?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -220,6 +272,37 @@ export interface operations {
             };
         };
     };
+    get_info_api_d__db_path__info_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                db_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_schema_api_d__db_path__schema_get: {
         parameters: {
             query?: never;
@@ -256,7 +339,6 @@ export interface operations {
             query?: {
                 offset?: number;
                 limit?: number;
-                status?: string;
             };
             header?: never;
             path: {
@@ -272,7 +354,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RowListResponse"];
+                    "application/json": components["schemas"]["GenericRowListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -286,7 +368,76 @@ export interface operations {
             };
         };
     };
-    get_run_api_d__db_path__runs__key__get: {
+    get_row_api_d__db_path__row__offset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                db_path: string;
+                offset: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_view_api_d__db_path__view_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+                filter?: string;
+            };
+            header?: never;
+            path: {
+                db_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginViewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_view_detail_api_d__db_path__view__key__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -304,7 +455,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunDetailResponse"];
+                    "application/json": components["schemas"]["PluginDetailResponse"];
                 };
             };
             /** @description Validation Error */

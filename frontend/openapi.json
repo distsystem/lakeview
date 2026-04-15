@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "lakeview",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/datasets": {
@@ -28,6 +28,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DatasetListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/d/{db_path}/info": {
+      "get": {
+        "summary": "Get Info",
+        "operationId": "get_info_api_d__db_path__info_get",
+        "parameters": [
+          {
+            "name": "db_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Db Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetInfoResponse"
                 }
               }
             }
@@ -118,16 +157,6 @@
               "default": 50,
               "title": "Limit"
             }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "all",
-              "title": "Status"
-            }
           }
         ],
         "responses": {
@@ -136,7 +165,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RowListResponse"
+                  "$ref": "#/components/schemas/GenericRowListResponse"
                 }
               }
             }
@@ -154,10 +183,130 @@
         }
       }
     },
-    "/api/d/{db_path}/runs/{key}": {
+    "/api/d/{db_path}/row/{offset}": {
       "get": {
-        "summary": "Get Run",
-        "operationId": "get_run_api_d__db_path__runs__key__get",
+        "summary": "Get Row",
+        "operationId": "get_row_api_d__db_path__row__offset__get",
+        "parameters": [
+          {
+            "name": "db_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Db Path"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Row Api D  Db Path  Row  Offset  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/d/{db_path}/view": {
+      "get": {
+        "summary": "Get View",
+        "operationId": "get_view_api_d__db_path__view_get",
+        "parameters": [
+          {
+            "name": "db_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Db Path"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all",
+              "title": "Filter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginViewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/d/{db_path}/view/{key}": {
+      "get": {
+        "summary": "Get View Detail",
+        "operationId": "get_view_detail_api_d__db_path__view__key__get",
         "parameters": [
           {
             "name": "db_path",
@@ -184,7 +333,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunDetailResponse"
+                  "$ref": "#/components/schemas/PluginDetailResponse"
                 }
               }
             }
@@ -262,6 +411,46 @@
         ],
         "title": "DatasetEntry"
       },
+      "DatasetInfoResponse": {
+        "properties": {
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnInfo"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "plugin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plugin"
+          },
+          "filters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Filters",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_count",
+          "columns"
+        ],
+        "title": "DatasetInfoResponse"
+      },
       "DatasetListResponse": {
         "properties": {
           "prefix": {
@@ -283,20 +472,7 @@
         ],
         "title": "DatasetListResponse"
       },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "RowListResponse": {
+      "GenericRowListResponse": {
         "properties": {
           "total": {
             "type": "integer",
@@ -312,13 +488,91 @@
           },
           "rows": {
             "items": {
-              "$ref": "#/components/schemas/RowSummary"
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "rows"
+        ],
+        "title": "GenericRowListResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PluginDetailResponse": {
+        "properties": {
+          "plugin": {
+            "type": "string",
+            "title": "Plugin"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plugin",
+          "data"
+        ],
+        "title": "PluginDetailResponse"
+      },
+      "PluginViewResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
             },
             "type": "array",
             "title": "Rows"
           },
           "stats": {
-            "$ref": "#/components/schemas/Stats"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stats"
+          },
+          "plugin": {
+            "type": "string",
+            "title": "Plugin"
           }
         },
         "type": "object",
@@ -327,100 +581,9 @@
           "offset",
           "limit",
           "rows",
-          "stats"
+          "plugin"
         ],
-        "title": "RowListResponse"
-      },
-      "RowSummary": {
-        "properties": {
-          "row_offset": {
-            "type": "integer",
-            "title": "Row Offset"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          },
-          "output": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata"
-          },
-          "correct": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Correct"
-          }
-        },
-        "type": "object",
-        "required": [
-          "row_offset"
-        ],
-        "title": "RowSummary"
-      },
-      "RunDetailResponse": {
-        "properties": {
-          "row": {
-            "$ref": "#/components/schemas/RowSummary"
-          },
-          "messages": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Messages"
-          }
-        },
-        "type": "object",
-        "required": [
-          "row",
-          "messages"
-        ],
-        "title": "RunDetailResponse"
+        "title": "PluginViewResponse"
       },
       "SchemaResponse": {
         "properties": {
@@ -437,50 +600,6 @@
           "columns"
         ],
         "title": "SchemaResponse"
-      },
-      "Stats": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "ok": {
-            "type": "integer",
-            "title": "Ok"
-          },
-          "wrong": {
-            "type": "integer",
-            "title": "Wrong"
-          },
-          "error": {
-            "type": "integer",
-            "title": "Error"
-          },
-          "pending": {
-            "type": "integer",
-            "title": "Pending"
-          },
-          "accuracy": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Accuracy"
-          }
-        },
-        "type": "object",
-        "required": [
-          "total",
-          "ok",
-          "wrong",
-          "error",
-          "pending"
-        ],
-        "title": "Stats"
       },
       "ValidationError": {
         "properties": {
