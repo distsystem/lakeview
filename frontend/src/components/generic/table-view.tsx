@@ -15,6 +15,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RowDetail } from "@/components/generic/row-detail";
 import type { ColumnInfo } from "@/api/client";
 
@@ -24,20 +38,40 @@ function CellRenderer({ value }: { value: unknown }) {
   if (typeof value === "object") {
     const text = JSON.stringify(value);
     return (
-      <span className="font-mono text-xs truncate block max-w-[300px]" title={text}>
-        {text}
-      </span>
+      <Tooltip>
+        <TooltipTrigger>
+          <span className="font-mono text-xs truncate block max-w-[300px]">{text}</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-md">
+          <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(value, null, 2)}</pre>
+        </TooltipContent>
+      </Tooltip>
     );
   }
   const text = String(value);
   if (text.length > 120) {
     return (
-      <span className="truncate block max-w-[300px]" title={text}>
-        {text}
-      </span>
+      <Tooltip>
+        <TooltipTrigger>
+          <span className="truncate block max-w-[300px]">{text}</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-md">
+          <p className="text-xs">{text}</p>
+        </TooltipContent>
+      </Tooltip>
     );
   }
   return <span>{text}</span>;
+}
+
+function TableSkeleton() {
+  return (
+    <div className="p-4 space-y-3">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <Skeleton key={i} className="h-8 w-full" />
+      ))}
+    </div>
+  );
 }
 
 const PAGE_SIZE = 50;
@@ -64,7 +98,7 @@ export function GenericTableView({
         size: 50,
       },
       ...schema
-        .filter((col) => col.name !== "messages") // skip heavy columns by default
+        .filter((col) => col.name !== "messages")
         .map((col) => ({
           accessorKey: col.name,
           header: col.name,
@@ -91,14 +125,15 @@ export function GenericTableView({
   return (
     <div className="flex h-[calc(100vh-48px)] overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2 border-b text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
           <span>{total} rows</span>
           <span>·</span>
           <span>{schema.length} columns</span>
         </div>
+        <Separator />
         <div className="flex-1 overflow-auto">
           {isLoading ? (
-            <p className="p-4 text-muted-foreground">Loading...</p>
+            <TableSkeleton />
           ) : (
             <Table>
               <TableHeader>
@@ -134,7 +169,8 @@ export function GenericTableView({
             </Table>
           )}
         </div>
-        <div className="flex items-center justify-between px-4 py-2 border-t">
+        <Separator />
+        <div className="flex items-center justify-between px-4 py-2">
           <Button
             variant="outline"
             size="sm"
@@ -156,15 +192,20 @@ export function GenericTableView({
           </Button>
         </div>
       </div>
-      {selectedRow !== null && (
-        <div className="w-[400px] border-l overflow-y-auto shrink-0">
-          <RowDetail
-            dbPath={dbPath}
-            offset={selectedRow}
-            onClose={() => setSelectedRow(null)}
-          />
-        </div>
-      )}
+      <Sheet
+        open={selectedRow !== null}
+        onOpenChange={(open) => { if (!open) setSelectedRow(null); }}
+      >
+        <SheetContent side="right" className="w-[450px] sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="font-mono">Row #{selectedRow}</SheetTitle>
+            <SheetDescription>Full row data</SheetDescription>
+          </SheetHeader>
+          {selectedRow !== null && (
+            <RowDetail dbPath={dbPath} offset={selectedRow} />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

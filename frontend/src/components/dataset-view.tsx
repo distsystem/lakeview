@@ -2,12 +2,27 @@ import { useParams } from "react-router";
 import { useDatasetInfo } from "@/hooks/use-dataset-info";
 import { DatasetList } from "@/components/dataset-list";
 import { GenericTableView } from "@/components/generic/table-view";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getPlugin } from "@/components/plugins";
 
 function EmptyMain() {
   return (
     <div className="flex-1 flex items-center justify-center h-full">
       <p className="text-muted-foreground text-sm">Select a run from the sidebar</p>
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="p-6 space-y-4">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-4 w-32" />
+      <div className="space-y-2 mt-6">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </div>
     </div>
   );
 }
@@ -20,20 +35,12 @@ export function DatasetView() {
 
   const { data: info, isLoading, isError } = useDatasetInfo(dbPath);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-48px)]">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingSkeleton />;
 
-  // Not a dataset — fall back to directory browser
   if (isError || !info) {
     return <DatasetList prefix={dbPath} />;
   }
 
-  // Plugin detected? Use rich view.
   if (info.plugin) {
     const plugin = getPlugin(info.plugin);
     if (plugin) {
@@ -50,6 +57,5 @@ export function DatasetView() {
     }
   }
 
-  // Fallback: generic table view
   return <GenericTableView dbPath={dbPath} schema={info.columns} />;
 }

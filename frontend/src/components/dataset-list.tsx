@@ -4,6 +4,8 @@ import { useDatasets } from "@/hooks/use-datasets";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
   const [input, setInput] = useState(routePrefix || "sample-data");
@@ -11,7 +13,6 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
   const navigate = useNavigate();
   const { data, isLoading } = useDatasets(prefix);
 
-  // Sync with route prefix changes
   if (routePrefix && routePrefix !== prefix) {
     setPrefix(routePrefix);
     setInput(routePrefix);
@@ -28,11 +29,11 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
           }}
           className="flex gap-2 mb-6"
         >
-          <input
+          <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="local path or s3 prefix"
-            className="flex-1 font-mono text-sm px-3 py-2 border rounded-md bg-background"
+            className="flex-1 font-mono text-sm"
           />
           <Button type="submit">Browse</Button>
         </form>
@@ -40,7 +41,13 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
       {routePrefix && (
         <p className="text-muted-foreground text-sm mb-4 font-mono">{prefix}</p>
       )}
-      {isLoading && <p className="text-muted-foreground">Loading...</p>}
+      {isLoading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
+        </div>
+      )}
       {data && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {data.datasets.map((ds) => {

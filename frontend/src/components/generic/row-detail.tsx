@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
-import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
 
 function JsonValue({ value }: { value: unknown }) {
   if (value == null) return <span className="text-muted-foreground/50">null</span>;
@@ -22,11 +23,9 @@ function JsonValue({ value }: { value: unknown }) {
 export function RowDetail({
   dbPath,
   offset,
-  onClose,
 }: {
   dbPath: string;
   offset: number;
-  onClose: () => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["row", dbPath, offset],
@@ -38,27 +37,34 @@ export function RowDetail({
     },
   });
 
-  return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-mono text-sm font-semibold">Row #{offset}</h3>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          ×
-        </Button>
+  if (isLoading) {
+    return (
+      <div className="px-4 py-2 space-y-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-5 w-full" />
+          </div>
+        ))}
       </div>
-      {isLoading && <p className="text-muted-foreground text-xs">Loading...</p>}
-      {data && (
-        <div className="space-y-3">
-          {Object.entries(data as Record<string, unknown>).map(([key, value]) => (
-            <div key={key}>
-              <div className="font-mono text-xs text-muted-foreground mb-1">{key}</div>
-              <div className="text-sm">
-                <JsonValue value={value} />
-              </div>
-            </div>
-          ))}
+    );
+  }
+
+  if (!data) return null;
+
+  const entries = Object.entries(data as Record<string, unknown>);
+
+  return (
+    <div className="px-4 py-2 space-y-3">
+      {entries.map(([key, value], i) => (
+        <div key={key}>
+          <div className="font-mono text-xs text-muted-foreground mb-1">{key}</div>
+          <div className="text-sm">
+            <JsonValue value={value} />
+          </div>
+          {i < entries.length - 1 && <Separator className="mt-3" />}
         </div>
-      )}
+      ))}
     </div>
   );
 }
