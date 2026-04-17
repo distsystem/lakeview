@@ -12,8 +12,9 @@ from pydantic import BaseModel
 class DatasetEntry(BaseModel):
     name: str
     path: str
-    kind: str  # "lance", "parquet", "delta", "iceberg", "directory"
+    kind: str  # "lance", "parquet", "delta", "iceberg", "directory", "file"
     row_count: int | None = None
+    size: int | None = None  # bytes, only for "file"
 
 
 class DatasetListResponse(BaseModel):

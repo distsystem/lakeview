@@ -146,6 +146,8 @@ export interface components {
             kind: string;
             /** Row Count */
             row_count?: number | null;
+            /** Size */
+            size?: number | null;
         };
         /** DatasetInfoResponse */
         DatasetInfoResponse: {

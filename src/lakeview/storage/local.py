@@ -30,8 +30,19 @@ def list_local(prefix: str) -> list[EntryInfo]:
         return []
     entries = []
     for name in sorted(os.listdir(prefix)):
-        full = os.path.join(prefix, name)
-        if not os.path.isdir(full) or name.startswith(("_", ".")):
+        if name.startswith("."):
             continue
-        entries.append(EntryInfo(name=name, path=full, kind=detect_format(full)))
+        full = os.path.join(prefix, name)
+        if os.path.isdir(full):
+            if name.startswith("_"):
+                continue
+            entries.append(EntryInfo(name=name, path=full, kind=detect_format(full)))
+        else:
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                size = None
+            entries.append(EntryInfo(name=name, path=full, kind="file", size=size))
+    # Directories first, then files; alphabetical within each
+    entries.sort(key=lambda e: (e.kind == "file", e.name))
     return entries

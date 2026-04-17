@@ -6,11 +6,18 @@ Run:
     uvicorn lakeview.app:app --host 0.0.0.0 --port 8766 --reload
 """
 
+import mimetypes
+import os
+
+import pyarrow.fs as pafs
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
 
 from lakeview import formats, models, storage
 from lakeview.plugins import registry
+
+MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
 
 app = FastAPI(title="lakeview", version="0.2.0")
 app.add_middleware(
@@ -36,6 +43,45 @@ def _open_or_404(db_path: str) -> tuple[formats.base.DatasetReader, str]:
     return reader, kind
 
 
+# -- Raw file serving (for non-dataset previews) --
+
+
+def _resolve_local_file(path: str) -> str | None:
+    """Find a local file by relative or absolute path."""
+    for candidate in (path, f"/{path}"):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+@app.get("/api/file/{path:path}")
+def get_file(path: str) -> Response:
+    """Serve raw file bytes from local FS or S3, for preview in the frontend."""
+    mime, _ = mimetypes.guess_type(path)
+    media_type = mime or "application/octet-stream"
+
+    # Local first
+    resolved = _resolve_local_file(path)
+    if resolved:
+        if os.path.getsize(resolved) > MAX_PREVIEW_BYTES:
+            raise HTTPException(413, f"file too large for preview: {resolved}")
+        return FileResponse(resolved, media_type=media_type)
+
+    # S3 fallback
+    try:
+        fs, root = pafs.FileSystem.from_uri(f"s3://{path}")
+        info = fs.get_file_info(root)
+        if info.type != pafs.FileType.File:
+            raise HTTPException(404, f"file not found: {path}")
+        if info.size and info.size > MAX_PREVIEW_BYTES:
+            raise HTTPException(413, f"file too large for preview: {path}")
+        with fs.open_input_stream(root) as f:
+            data = f.readall()
+        return Response(content=data, media_type=media_type)
+    except OSError as e:
+        raise HTTPException(404, f"file not found: {path}") from e
+
+
 # -- Dataset browsing --
 
 
@@ -50,7 +96,8 @@ def get_datasets(prefix: str = "") -> models.DatasetListResponse:
             row_count = reader.count_rows() if reader else None
         datasets.append(
             models.DatasetEntry(
-                name=e.name, path=e.path, kind=e.kind, row_count=row_count,
+                name=e.name, path=e.path, kind=e.kind,
+                row_count=row_count, size=e.size,
             )
         )
     return models.DatasetListResponse(prefix=resolved, datasets=datasets)
