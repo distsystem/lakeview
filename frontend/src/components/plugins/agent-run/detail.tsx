@@ -321,7 +321,7 @@ export function AgentRunDetail({
 
   return (
     <ScrollArea className="flex-1 h-full">
-      <div className="p-6 max-w-4xl">
+      <div className="p-6 max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <h1 className="font-mono text-lg font-semibold">Run {runKey}</h1>
