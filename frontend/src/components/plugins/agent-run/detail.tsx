@@ -140,7 +140,7 @@ function PartView({ part }: { part: Record<string, unknown> }) {
   );
 
   return (
-    <Card>
+    <Card className="border ring-0 shadow-none">
       <div className="py-2 px-3 flex items-center gap-2">
         <Icon className="size-3.5" />
         <Badge variant={labelConfig.variant} className="text-[11px]">{labelConfig.label}</Badge>
