@@ -55,6 +55,17 @@ import {
   Wrench,
   Brain,
 } from "lucide-react";
+import Markdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
+
+// Normalize LaTeX delimiters: \[...\] -> $$...$$, \(...\) -> $...$
+function normalizeMath(text: string): string {
+  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_m, inner) => `$$${inner}$$`);
+  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_m, inner) => `$${inner}$`);
+  return text;
+}
 
 // -- Part renderers (using AI Elements) --
 
@@ -120,6 +131,14 @@ function PartView({ part }: { part: Record<string, unknown> }) {
 
   const Icon = labelConfig.icon;
 
+  const rendered = (
+    <div className="prose prose-sm dark:prose-invert max-w-none">
+      <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+        {normalizeMath(content)}
+      </Markdown>
+    </div>
+  );
+
   return (
     <Card>
       <div className="py-2 px-3 flex items-center gap-2">
@@ -127,12 +146,10 @@ function PartView({ part }: { part: Record<string, unknown> }) {
         <Badge variant={labelConfig.variant} className="text-[11px]">{labelConfig.label}</Badge>
       </div>
       <CardContent className="pt-0 px-3 pb-3">
-        {content.length > 200 ? (
-          <ScrollArea className="max-h-96">
-            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">{content}</div>
-          </ScrollArea>
+        {content.length > 1000 ? (
+          <ScrollArea className="max-h-96">{rendered}</ScrollArea>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">{content}</div>
+          rendered
         )}
       </CardContent>
     </Card>
