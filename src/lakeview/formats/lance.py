@@ -4,8 +4,6 @@ import os
 
 import lance
 
-from lakeview.formats.base import DatasetReader
-
 _cache: dict[str, lance.LanceDataset] = {}
 
 
@@ -56,7 +54,3 @@ class LanceReader:
         if tbl.num_rows == 0:
             return None
         return tbl.to_pylist()[0]
-
-
-# Satisfy the DatasetReader protocol check
-_: type[DatasetReader] = LanceReader  # type: ignore[assignment]

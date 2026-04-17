@@ -36,10 +36,14 @@ def list_s3(prefix: str) -> list[EntryInfo]:
             kind = _detect_format(fs, e.path)
             results.append(EntryInfo(name=name, path=full_path, kind=kind))
         elif e.type == pafs.FileType.File:
-            results.append(EntryInfo(
-                name=name, path=full_path, kind="file",
-                size=e.size if e.size is not None else None,
-            ))
+            results.append(
+                EntryInfo(
+                    name=name,
+                    path=full_path,
+                    kind="file",
+                    size=e.size,
+                )
+            )
     # Directories first, then files
     results.sort(key=lambda r: (r.kind == "file", r.name))
     return results

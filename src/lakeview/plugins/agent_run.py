@@ -24,17 +24,13 @@ def _decode_json(row: dict) -> dict:
     return row
 
 
-def _decode_messages(messages: list) -> list[dict]:
-    result = []
+def _decode_messages(messages: list[dict]) -> list[dict]:
     for msg in messages:
-        msg = _decode_json(dict(msg) if not isinstance(msg, dict) else msg)
-        if "parts" in msg and isinstance(msg["parts"], list):
-            msg["parts"] = [
-                _decode_json(dict(p) if not isinstance(p, dict) else p)
-                for p in msg["parts"]
-            ]
-        result.append(msg)
-    return result
+        _decode_json(msg)
+        if isinstance(msg.get("parts"), list):
+            for p in msg["parts"]:
+                _decode_json(p)
+    return messages
 
 
 class AgentRunPlugin:

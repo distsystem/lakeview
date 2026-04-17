@@ -96,8 +96,11 @@ def get_datasets(prefix: str = "") -> models.DatasetListResponse:
             row_count = reader.count_rows() if reader else None
         datasets.append(
             models.DatasetEntry(
-                name=e.name, path=e.path, kind=e.kind,
-                row_count=row_count, size=e.size,
+                name=e.name,
+                path=e.path,
+                kind=e.kind,
+                row_count=row_count,
+                size=e.size,
             )
         )
     return models.DatasetListResponse(prefix=resolved, datasets=datasets)
@@ -145,7 +148,10 @@ def get_rows(
     total = reader.count_rows()
     rows = reader.scan(offset, limit)
     return models.GenericRowListResponse(
-        total=total, offset=offset, limit=limit, rows=rows,
+        total=total,
+        offset=offset,
+        limit=limit,
+        rows=rows,
     )
 
 
@@ -183,7 +189,9 @@ def get_view(
     stats = plugin.summarize_rows(all_rows)
     filtered = plugin.filter_rows(all_rows, filter)
     page = filtered[offset : offset + limit]
-    sidebar_rows = [plugin.sidebar_row(r) | {"row_offset": r["row_offset"]} for r in page]
+    sidebar_rows = [
+        plugin.sidebar_row(r) | {"row_offset": r["row_offset"]} for r in page
+    ]
 
     return models.PluginViewResponse(
         total=len(filtered),
@@ -203,7 +211,9 @@ def get_view_detail(db_path: str, key: str) -> models.PluginDetailResponse:
         raise HTTPException(404, "no plugin detected for this schema")
 
     # Resolve key (plugin-specific: numeric offset or session_id)
-    offset = getattr(plugin, "resolve_key", lambda r, k: int(k) if k.isdigit() else None)(reader, key)
+    offset = getattr(
+        plugin, "resolve_key", lambda r, k: int(k) if k.isdigit() else None
+    )(reader, key)
     if offset is None:
         raise HTTPException(404, f"run not found: {key}")
 
