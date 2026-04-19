@@ -17,9 +17,9 @@ from lakeview import formats, models, storage
 from lakeview.plugins import registry
 
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
-# Bounded pool for per-directory Lance probes (opening a dataset = detection + row count).
-# obstore/lance release the GIL during I/O, so threads parallelize effectively.
-_LANCE_PROBE_WORKERS = 16
+# Bounded pool for per-directory format detection. obstore/lance release
+# the GIL during I/O, so threads parallelize effectively.
+_DATASET_PROBE_WORKERS = 32
 
 app = FastAPI(title="lakeview", version="0.2.0")
 app.add_middleware(
@@ -55,25 +55,32 @@ def get_file(path: str) -> Response:
 # -- Dataset browsing --
 
 
-def _probe_lance(path: str) -> tuple[str, int | None]:
-    """Open as Lance; on success return ('lance', row_count), else ('directory', None)."""
-    reader = formats.open_dataset(path, "lance")
-    if reader is None:
-        return "directory", None
-    return "lance", reader.count_rows()
-
-
 @app.get("/api/datasets")
 def get_datasets(prefix: str = "") -> models.DatasetListResponse:
     resolved, entries = storage.list_entries(prefix)
-    dir_paths = [e.path for e in entries if e.kind == "directory"]
-    if dir_paths:
-        with ThreadPoolExecutor(max_workers=_LANCE_PROBE_WORKERS) as pool:
+    dir_entries = [e for e in entries if e.kind == "directory"]
+    probed: dict[str, tuple[str, int | None]] = {}
+    if dir_entries:
+        parent_store = storage.open_store(resolved)
+
+        def probe(entry):
+            p = storage.Probe(parent_store, entry.name)
+            cls = formats.detect(p)
+            if cls is None:
+                return "directory", None
+            reader = cls.open(entry.path)
+            if reader is None:
+                return "directory", None
+            return cls.KIND, reader.count_rows()
+
+        with ThreadPoolExecutor(max_workers=_DATASET_PROBE_WORKERS) as pool:
             probed = dict(
-                zip(dir_paths, pool.map(_probe_lance, dir_paths), strict=True)
+                zip(
+                    (e.path for e in dir_entries),
+                    pool.map(probe, dir_entries),
+                    strict=True,
+                )
             )
-    else:
-        probed = {}
     datasets = [
         models.DatasetEntry(
             name=e.name,

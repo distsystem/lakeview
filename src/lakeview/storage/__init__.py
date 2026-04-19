@@ -50,6 +50,39 @@ def resolve_dir(uri: str) -> str | None:
     return _resolve_local_dir(uri)
 
 
+def open_store(uri: str):
+    """Open an obstore rooted at a directory URI."""
+    return _open_dir(uri)
+
+
+class Probe:
+    """Cheap existence probes against a subdirectory of a shared store.
+
+    Uses prefix-filtered LIST (max-keys=1) so cost stays O(1) regardless
+    of how many objects live under the directory. Reuses the parent
+    store's HTTP client across all probes to avoid connection thrash.
+    """
+
+    def __init__(self, store, sub: str = "") -> None:
+        self._store = store
+        self._base = f"{sub.rstrip('/')}/" if sub else ""
+        self._seen: dict[str, bool] = {}
+
+    def has_any(self, marker: str) -> bool:
+        key = f"{self._base}{marker}"
+        if key in self._seen:
+            return self._seen[key]
+        hit = False
+        try:
+            for batch in obs.list(self._store, prefix=key, chunk_size=1):
+                hit = len(batch) > 0
+                break
+        except Exception:
+            hit = False
+        self._seen[key] = hit
+        return hit
+
+
 def list_entries(uri: str) -> tuple[str, list[EntryInfo]]:
     """List 1 level under `uri`. Returns (resolved_uri, entries)."""
     if not uri:

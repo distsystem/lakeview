@@ -19,8 +19,15 @@ def _resolve_uri(db_path: str) -> str:
 
 
 class LanceReader:
+    KIND = "lance"
+    MARKERS = ("_versions/",)
+
     def __init__(self, ds: lance.LanceDataset) -> None:
         self._ds = ds
+
+    @classmethod
+    def detect(cls, probe) -> bool:
+        return all(probe.has_any(m) for m in cls.MARKERS)
 
     @classmethod
     def open(cls, db_path: str) -> "LanceReader | None":
