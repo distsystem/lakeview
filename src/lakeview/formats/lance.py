@@ -8,12 +8,14 @@ _cache: dict[str, lance.LanceDataset] = {}
 
 
 def _resolve_uri(db_path: str) -> str:
+    if db_path.startswith("s3://"):
+        return db_path
     if os.path.exists(db_path):
         return os.path.abspath(db_path)
     absolute = f"/{db_path}"
     if os.path.exists(absolute):
         return absolute
-    return f"s3://{db_path}"
+    raise FileNotFoundError(db_path)
 
 
 class LanceReader:

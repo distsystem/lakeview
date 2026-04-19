@@ -9,8 +9,17 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
+function splitSegments(path: string): string[] {
+  // Keep `s3://bucket` as one segment so re-joining can't collapse `//`.
+  if (path.startsWith("s3://")) {
+    const [bucket, ...rest] = path.slice("s3://".length).split("/").filter(Boolean);
+    return bucket ? [`s3://${bucket}`, ...rest] : [];
+  }
+  return path.split("/").filter(Boolean);
+}
+
 export function PathBreadcrumb({ path }: { path: string }) {
-  const segments = path.split("/").filter(Boolean);
+  const segments = splitSegments(path);
 
   return (
     <Breadcrumb>

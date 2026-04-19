@@ -42,7 +42,7 @@ const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"])
 const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 
 function fileUrl(path: string): string {
-  return `/api/file/${path.split("/").map(encodeURIComponent).join("/")}`;
+  return `/api/file/${encodeURIComponent(path)}`;
 }
 
 function extOf(path: string): string {

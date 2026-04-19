@@ -31,13 +31,16 @@ app.add_middleware(
 def _open_or_404(db_path: str) -> tuple[formats.base.DatasetReader, str]:
     """Resolve path, detect format, open dataset — or raise 404."""
     db_path = db_path.rstrip("/")
-    # Detect kind from storage layer
-    resolved = storage.local.resolve_local(db_path)
-    if resolved:
-        kind = storage.local.detect_format(resolved)
-    else:
+    if storage.is_s3(db_path):
         kind = "lance"  # S3 paths assumed lance for now
-    reader = formats.open_dataset(resolved or db_path, kind)
+        target = db_path
+    else:
+        resolved = storage.local.resolve_local(db_path)
+        if not resolved:
+            raise HTTPException(404, f"dataset not found: {db_path}")
+        kind = storage.local.detect_format(resolved)
+        target = resolved
+    reader = formats.open_dataset(target, kind)
     if reader is None:
         raise HTTPException(404, f"dataset not found: {db_path}")
     return reader, kind
@@ -60,26 +63,26 @@ def get_file(path: str) -> Response:
     mime, _ = mimetypes.guess_type(path)
     media_type = mime or "application/octet-stream"
 
-    # Local first
-    resolved = _resolve_local_file(path)
-    if resolved:
-        if os.path.getsize(resolved) > MAX_PREVIEW_BYTES:
-            raise HTTPException(413, f"file too large for preview: {resolved}")
-        return FileResponse(resolved, media_type=media_type)
+    if storage.is_s3(path):
+        try:
+            fs, root = pafs.FileSystem.from_uri(path)
+            info = fs.get_file_info(root)
+            if info.type != pafs.FileType.File:
+                raise HTTPException(404, f"file not found: {path}")
+            if info.size and info.size > MAX_PREVIEW_BYTES:
+                raise HTTPException(413, f"file too large for preview: {path}")
+            with fs.open_input_stream(root) as f:
+                data = f.readall()
+            return Response(content=data, media_type=media_type)
+        except OSError as e:
+            raise HTTPException(404, f"file not found: {path}") from e
 
-    # S3 fallback
-    try:
-        fs, root = pafs.FileSystem.from_uri(f"s3://{path}")
-        info = fs.get_file_info(root)
-        if info.type != pafs.FileType.File:
-            raise HTTPException(404, f"file not found: {path}")
-        if info.size and info.size > MAX_PREVIEW_BYTES:
-            raise HTTPException(413, f"file too large for preview: {path}")
-        with fs.open_input_stream(root) as f:
-            data = f.readall()
-        return Response(content=data, media_type=media_type)
-    except OSError as e:
-        raise HTTPException(404, f"file not found: {path}") from e
+    resolved = _resolve_local_file(path)
+    if not resolved:
+        raise HTTPException(404, f"file not found: {path}")
+    if os.path.getsize(resolved) > MAX_PREVIEW_BYTES:
+        raise HTTPException(413, f"file too large for preview: {resolved}")
+    return FileResponse(resolved, media_type=media_type)
 
 
 # -- Dataset browsing --

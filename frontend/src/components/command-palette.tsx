@@ -32,14 +32,16 @@ export function CommandPalette() {
 
   // Use the typed text as the browse prefix; deepest existing prefix wins.
   // Strip trailing slashes and trailing partial segment so "sample-data/k"
-  // still browses "sample-data".
+  // still browses "sample-data". Preserve the `s3://` scheme when splitting.
   const trimmed = query.trim().replace(/\/+$/, "");
-  const lastSlash = trimmed.lastIndexOf("/");
+  const scheme = trimmed.startsWith("s3://") ? "s3://" : "";
+  const body = trimmed.slice(scheme.length);
+  const lastSlash = body.lastIndexOf("/");
   const browsePrefix =
     trimmed === "" ? "sample-data"
     : lastSlash === -1 ? trimmed
-    : trimmed.slice(0, lastSlash);
-  const tailFilter = lastSlash === -1 ? "" : trimmed.slice(lastSlash + 1).toLowerCase();
+    : scheme + body.slice(0, lastSlash);
+  const tailFilter = lastSlash === -1 ? "" : body.slice(lastSlash + 1).toLowerCase();
 
   const { data, isLoading } = useQuery({
     queryKey: ["palette-datasets", browsePrefix],
@@ -59,7 +61,7 @@ export function CommandPalette() {
   const go = (path: string, isLance: boolean) => {
     setOpen(false);
     setQuery("");
-    if (isLance) navigate(`/${path}`);
+    if (isLance) navigate(`/${encodeURIComponent(path)}`);
     else navigate(`/?prefix=${encodeURIComponent(path)}`);
   };
 

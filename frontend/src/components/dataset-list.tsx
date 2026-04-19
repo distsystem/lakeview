@@ -134,7 +134,7 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
 
                 // Primary action per row type
                 const onPrimary = () => {
-                  if (isLance) navigate(`/${ds.path}`);
+                  if (isLance) navigate(`/${encodeURIComponent(ds.path)}`);
                   else if (isDir) navigate(`/?prefix=${encodeURIComponent(ds.path)}`);
                   else if (isFile) setPreviewPath(ds.path);
                 };
@@ -157,7 +157,7 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
                         {isLance || isDir ? (
                           <Link
                             to={isLance
-                              ? `/${ds.path}`
+                              ? `/${encodeURIComponent(ds.path)}`
                               : `/?prefix=${encodeURIComponent(ds.path)}`}
                             className="no-underline hover:underline"
                             onClick={(e) => e.stopPropagation()}
