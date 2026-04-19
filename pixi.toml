@@ -18,3 +18,4 @@ hatchling = "*"
 lakeview = { path = ".", editable = true }
 fastapi = "*"
 httpx = "*"
+obstore = "*"

@@ -8,7 +8,7 @@ _cache: dict[str, lance.LanceDataset] = {}
 
 
 def _resolve_uri(db_path: str) -> str:
-    if db_path.startswith("s3://"):
+    if "://" in db_path:
         return db_path
     if os.path.exists(db_path):
         return os.path.abspath(db_path)

@@ -7,12 +7,10 @@ Run:
 """
 
 import mimetypes
-import os
 
-import pyarrow.fs as pafs
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 
 from lakeview import formats, models, storage
 from lakeview.plugins import registry
@@ -31,58 +29,29 @@ app.add_middleware(
 def _open_or_404(db_path: str) -> tuple[formats.base.DatasetReader, str]:
     """Resolve path, detect format, open dataset — or raise 404."""
     db_path = db_path.rstrip("/")
-    if storage.is_s3(db_path):
-        kind = "lance"  # S3 paths assumed lance for now
-        target = db_path
-    else:
-        resolved = storage.local.resolve_local(db_path)
-        if not resolved:
-            raise HTTPException(404, f"dataset not found: {db_path}")
-        kind = storage.local.detect_format(resolved)
-        target = resolved
-    reader = formats.open_dataset(target, kind)
+    resolved = storage.resolve_dir(db_path)
+    if resolved is None:
+        raise HTTPException(404, f"dataset not found: {db_path}")
+    kind = storage.detect_format(resolved)
+    reader = formats.open_dataset(resolved, kind)
     if reader is None:
         raise HTTPException(404, f"dataset not found: {db_path}")
     return reader, kind
 
 
-# -- Raw file serving (for non-dataset previews) --
-
-
-def _resolve_local_file(path: str) -> str | None:
-    """Find a local file by relative or absolute path."""
-    for candidate in (path, f"/{path}"):
-        if os.path.isfile(candidate):
-            return candidate
-    return None
-
-
 @app.get("/api/file/{path:path}")
 def get_file(path: str) -> Response:
-    """Serve raw file bytes from local FS or S3, for preview in the frontend."""
+    """Serve raw file bytes from any storage backend, for preview in the frontend."""
     mime, _ = mimetypes.guess_type(path)
     media_type = mime or "application/octet-stream"
-
-    if storage.is_s3(path):
-        try:
-            fs, root = pafs.FileSystem.from_uri(path)
-            info = fs.get_file_info(root)
-            if info.type != pafs.FileType.File:
-                raise HTTPException(404, f"file not found: {path}")
-            if info.size and info.size > MAX_PREVIEW_BYTES:
-                raise HTTPException(413, f"file too large for preview: {path}")
-            with fs.open_input_stream(root) as f:
-                data = f.readall()
-            return Response(content=data, media_type=media_type)
-        except OSError as e:
-            raise HTTPException(404, f"file not found: {path}") from e
-
-    resolved = _resolve_local_file(path)
-    if not resolved:
+    try:
+        result = storage.read_file(path, MAX_PREVIEW_BYTES)
+    except ValueError as e:
+        raise HTTPException(413, str(e)) from e
+    if result is None:
         raise HTTPException(404, f"file not found: {path}")
-    if os.path.getsize(resolved) > MAX_PREVIEW_BYTES:
-        raise HTTPException(413, f"file too large for preview: {resolved}")
-    return FileResponse(resolved, media_type=media_type)
+    data, _ = result
+    return Response(content=data, media_type=media_type)
 
 
 # -- Dataset browsing --
