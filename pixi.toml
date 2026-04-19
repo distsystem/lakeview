@@ -6,7 +6,7 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
-dev = "uvicorn lakeview.app:app --host 0.0.0.0 --port 8766 --reload & cd frontend && npm run dev"
+dev = "uvicorn lakeview.app:app --host 0.0.0.0 --port 8766 --reload & cd frontend && bun run dev"
 
 [dependencies]
 python = "=3.12"
