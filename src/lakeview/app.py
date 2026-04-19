@@ -7,6 +7,7 @@ Run:
 """
 
 import mimetypes
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,9 @@ from lakeview import formats, models, storage
 from lakeview.plugins import registry
 
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
+# Bounded pool for per-directory Lance probes (opening a dataset = detection + row count).
+# obstore/lance release the GIL during I/O, so threads parallelize effectively.
+_LANCE_PROBE_WORKERS = 16
 
 app = FastAPI(title="lakeview", version="0.2.0")
 app.add_middleware(
@@ -26,17 +30,11 @@ app.add_middleware(
 )
 
 
-def _open_or_404(db_path: str) -> tuple[formats.base.DatasetReader, str]:
-    """Resolve path, detect format, open dataset — or raise 404."""
-    db_path = db_path.rstrip("/")
-    resolved = storage.resolve_dir(db_path)
-    if resolved is None:
-        raise HTTPException(404, f"dataset not found: {db_path}")
-    kind = storage.detect_format(resolved)
-    reader = formats.open_dataset(resolved, kind)
+def _open_or_404(db_path: str) -> formats.base.DatasetReader:
+    reader = formats.open_dataset(db_path.rstrip("/"), "lance")
     if reader is None:
         raise HTTPException(404, f"dataset not found: {db_path}")
-    return reader, kind
+    return reader
 
 
 @app.get("/api/file/{path:path}")
@@ -57,24 +55,35 @@ def get_file(path: str) -> Response:
 # -- Dataset browsing --
 
 
+def _probe_lance(path: str) -> tuple[str, int | None]:
+    """Open as Lance; on success return ('lance', row_count), else ('directory', None)."""
+    reader = formats.open_dataset(path, "lance")
+    if reader is None:
+        return "directory", None
+    return "lance", reader.count_rows()
+
+
 @app.get("/api/datasets")
 def get_datasets(prefix: str = "") -> models.DatasetListResponse:
     resolved, entries = storage.list_entries(prefix)
-    datasets = []
-    for e in entries:
-        row_count = e.row_count
-        if e.kind == "lance" and row_count is None:
-            reader = formats.open_dataset(e.path, e.kind)
-            row_count = reader.count_rows() if reader else None
-        datasets.append(
-            models.DatasetEntry(
-                name=e.name,
-                path=e.path,
-                kind=e.kind,
-                row_count=row_count,
-                size=e.size,
+    dir_paths = [e.path for e in entries if e.kind == "directory"]
+    if dir_paths:
+        with ThreadPoolExecutor(max_workers=_LANCE_PROBE_WORKERS) as pool:
+            probed = dict(
+                zip(dir_paths, pool.map(_probe_lance, dir_paths), strict=True)
             )
+    else:
+        probed = {}
+    datasets = [
+        models.DatasetEntry(
+            name=e.name,
+            path=e.path,
+            kind=probed.get(e.path, (e.kind, e.row_count))[0],
+            row_count=probed.get(e.path, (e.kind, e.row_count))[1],
+            size=e.size,
         )
+        for e in entries
+    ]
     return models.DatasetListResponse(prefix=resolved, datasets=datasets)
 
 
@@ -83,7 +92,7 @@ def get_datasets(prefix: str = "") -> models.DatasetListResponse:
 
 @app.get("/api/d/{db_path:path}/info")
 def get_info(db_path: str) -> models.DatasetInfoResponse:
-    reader, _ = _open_or_404(db_path)
+    reader = _open_or_404(db_path)
     plugin = registry.detect_plugin(reader.schema)
     columns = [
         models.ColumnInfo(name=f.name, type=str(f.type), nullable=f.nullable)
@@ -99,7 +108,7 @@ def get_info(db_path: str) -> models.DatasetInfoResponse:
 
 @app.get("/api/d/{db_path:path}/schema")
 def get_schema(db_path: str) -> models.SchemaResponse:
-    reader, _ = _open_or_404(db_path)
+    reader = _open_or_404(db_path)
     columns = [
         models.ColumnInfo(name=f.name, type=str(f.type), nullable=f.nullable)
         for f in reader.schema
@@ -116,7 +125,7 @@ def get_rows(
     offset: int = 0,
     limit: int = Query(default=50, le=200),
 ) -> models.GenericRowListResponse:
-    reader, _ = _open_or_404(db_path)
+    reader = _open_or_404(db_path)
     total = reader.count_rows()
     rows = reader.scan(offset, limit)
     return models.GenericRowListResponse(
@@ -129,7 +138,7 @@ def get_rows(
 
 @app.get("/api/d/{db_path:path}/row/{offset}")
 def get_row(db_path: str, offset: int) -> dict:
-    reader, _ = _open_or_404(db_path)
+    reader = _open_or_404(db_path)
     row = reader.get_row(offset)
     if row is None:
         raise HTTPException(404, f"row not found at offset {offset}")
@@ -146,7 +155,7 @@ def get_view(
     limit: int = Query(default=50, le=200),
     filter: str = "all",
 ) -> models.PluginViewResponse:
-    reader, _ = _open_or_404(db_path)
+    reader = _open_or_404(db_path)
     plugin = registry.detect_plugin(reader.schema)
     if not plugin:
         raise HTTPException(404, "no plugin detected for this schema")
@@ -177,7 +186,7 @@ def get_view(
 
 @app.get("/api/d/{db_path:path}/view/{key}")
 def get_view_detail(db_path: str, key: str) -> models.PluginDetailResponse:
-    reader, _ = _open_or_404(db_path)
+    reader = _open_or_404(db_path)
     plugin = registry.detect_plugin(reader.schema)
     if not plugin:
         raise HTTPException(404, "no plugin detected for this schema")

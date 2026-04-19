@@ -50,29 +50,6 @@ def resolve_dir(uri: str) -> str | None:
     return _resolve_local_dir(uri)
 
 
-_FORMAT_MARKERS: tuple[tuple[str, str], ...] = (
-    ("_versions", "lance"),
-    ("_delta_log", "delta"),
-    ("metadata", "iceberg"),
-)
-
-
-def detect_format(uri: str) -> str:
-    """Detect datalake format marker directories; fall back to 'directory'."""
-    try:
-        store = _open_dir(uri)
-    except Exception:
-        return "directory"
-    for marker, kind in _FORMAT_MARKERS:
-        try:
-            result = obs.list_with_delimiter(store, prefix=f"{marker}/")
-        except Exception:
-            continue
-        if result.get("objects") or result.get("common_prefixes"):
-            return kind
-    return "directory"
-
-
 def list_entries(uri: str) -> tuple[str, list[EntryInfo]]:
     """List 1 level under `uri`. Returns (resolved_uri, entries)."""
     if not uri:
@@ -92,8 +69,9 @@ def list_entries(uri: str) -> tuple[str, list[EntryInfo]]:
         name = prefix.rstrip("/").rsplit("/", 1)[-1]
         if not name or name.startswith((".", "_")):
             continue
-        child = f"{resolved}/{name}"
-        entries.append(EntryInfo(name=name, path=child, kind=detect_format(child)))
+        entries.append(
+            EntryInfo(name=name, path=f"{resolved}/{name}", kind="directory")
+        )
 
     for meta in result.get("objects", []):
         path = str(meta.get("path") or "")
