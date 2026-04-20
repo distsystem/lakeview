@@ -7,9 +7,9 @@ preview = ["pixi-build"]
 
 [tasks]
 dev = "uvicorn lakeview.app:app --host 0.0.0.0 --port 8766 --reload & cd frontend && bun run dev"
-# Open the UI at the dev default prefix. Reads $LAKEVIEW_DEFAULT_PREFIX
-# from the shell (set it in your .env + `source .env`, or via direnv).
-open = "xdg-open \"http://localhost:5173/?prefix=${LAKEVIEW_DEFAULT_PREFIX:-}\""
+# Open the UI at the dev default prefix. Picks up LAKEVIEW_DEFAULT_PREFIX
+# from .env at the repo root (or the shell, if already exported).
+open = "bash -c '[ -f .env ] && set -a && . ./.env && set +a; xdg-open \"http://localhost:5173/?prefix=$LAKEVIEW_DEFAULT_PREFIX\"'"
 
 [dependencies]
 python = "=3.12"
