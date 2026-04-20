@@ -2,30 +2,47 @@
 
 from __future__ import annotations
 
-import typing
+from typing import ClassVar
 
 import pyarrow as pa
+from lancedb.pydantic import LanceModel
 
 from lakeview.formats import DatasetReader
-from lakeview.plugins.agent_run import AgentRunPlugin
 
 
-class SchemaPlugin(typing.Protocol):
-    name: str
+class SchemaPlugin:
+    """Base class for schema-specific views.
 
-    @staticmethod
-    def matches(schema: pa.Schema) -> bool: ...
+    Sub-classes declare a `SCHEMA` (LanceModel) whose fields are the
+    required columns for this plugin to apply. `matches()` checks the
+    actual dataset schema against those field names.
+    """
 
-    def available_filters(self) -> list[str]: ...
+    name: ClassVar[str]
+    SCHEMA: ClassVar[type[LanceModel]]
 
-    def summarize_rows(self, rows: list[dict]) -> dict: ...
+    @classmethod
+    def matches(cls, schema: pa.Schema) -> bool:
+        required = set(cls.SCHEMA.model_fields)
+        return required.issubset({f.name for f in schema})
 
-    def filter_rows(self, rows: list[dict], filter_key: str) -> list[dict]: ...
+    def available_filters(self) -> list[str]:
+        return ["all"]
 
-    def sidebar_row(self, row: dict) -> dict: ...
+    def summarize_rows(self, rows: list[dict]) -> dict:
+        return {}
 
-    def detail(self, reader: DatasetReader, offset: int) -> dict | None: ...
+    def filter_rows(self, rows: list[dict], filter_key: str) -> list[dict]:
+        return rows
 
+    def sidebar_row(self, row: dict) -> dict:
+        return row
+
+    def detail(self, reader: DatasetReader, offset: int) -> dict | None:
+        return reader.get_row(offset)
+
+
+from lakeview.plugins.agent_run import AgentRunPlugin  # noqa: E402
 
 # Ordered; first match wins.
 _PLUGINS: list[SchemaPlugin] = [AgentRunPlugin()]

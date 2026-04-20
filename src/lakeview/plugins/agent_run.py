@@ -1,11 +1,24 @@
 """Agent run plugin — rich views for datasets with messages + session_id + correct."""
 
+from __future__ import annotations
+
 import json
 import re
+from typing import Any
 
-import pyarrow as pa
+from lancedb.pydantic import LanceModel
 
 from lakeview.formats import DatasetReader
+from lakeview.plugins import SchemaPlugin
+
+
+class AgentRunSchema(LanceModel):
+    """Columns this plugin needs; matches by name (loose)."""
+
+    session_id: str
+    messages: list[Any]
+    correct: bool | None
+
 
 _SESSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -33,13 +46,9 @@ def _decode_messages(messages: list[dict]) -> list[dict]:
     return messages
 
 
-class AgentRunPlugin:
+class AgentRunPlugin(SchemaPlugin):
     name = "agent_run"
-
-    @staticmethod
-    def matches(schema: pa.Schema) -> bool:
-        col_names = {f.name for f in schema}
-        return {"messages", "session_id", "correct"}.issubset(col_names)
+    SCHEMA = AgentRunSchema
 
     def available_filters(self) -> list[str]:
         return ["all", "ok", "wrong", "error", "pending"]
