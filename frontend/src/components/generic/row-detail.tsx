@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/api/client";
+import { api, type ColumnInfo } from "@/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { BlobCell, type BlobValue } from "@/components/generic/blob-cell";
 
 function JsonValue({ value }: { value: unknown }) {
   if (value == null) return <span className="text-muted-foreground/50">null</span>;
@@ -24,11 +25,14 @@ export function RowDetail({
   root,
   path,
   offset,
+  schema,
 }: {
   root: string;
   path: string;
   offset: number;
+  schema: ColumnInfo[];
 }) {
+  const blobCols = new Set(schema.filter((c) => c.is_blob).map((c) => c.name));
   const { data, isLoading } = useQuery({
     queryKey: ["row", root, path, offset],
     queryFn: async () => {
@@ -62,7 +66,18 @@ export function RowDetail({
         <div key={key}>
           <div className="font-mono text-xs text-muted-foreground mb-1">{key}</div>
           <div className="text-sm">
-            <JsonValue value={value} />
+            {blobCols.has(key) ? (
+              <BlobCell
+                root={root}
+                path={path}
+                offset={offset}
+                column={key}
+                value={value as BlobValue}
+                variant="full"
+              />
+            ) : (
+              <JsonValue value={value} />
+            )}
           </div>
           {i < entries.length - 1 && <Separator className="mt-3" />}
         </div>

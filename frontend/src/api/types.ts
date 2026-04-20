@@ -126,6 +126,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/d/{root}/{path}/blob/{offset}/{column}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Blob
+         * @description Stream one cell's raw bytes with a detected Content-Type.
+         *
+         *     Covers v1 / v2 Lance blob columns and plain binary columns. Content-Type
+         *     is taken from the blob's source URI suffix when available (v2 URI-refs),
+         *     and falls back to magic-byte sniffing of the first bytes. Non-binary
+         *     columns 404.
+         */
+        get: operations["get_blob_api_d__root___path__blob__offset___column__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/d/{root}/{path}/view": {
         parameters: {
             query?: never;
@@ -213,6 +238,11 @@ export interface components {
             type: string;
             /** Nullable */
             nullable: boolean;
+            /**
+             * Is Blob
+             * @default false
+             */
+            is_blob: boolean;
         };
         /** DatasetEntry */
         DatasetEntry: {
@@ -534,6 +564,40 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_blob_api_d__root___path__blob__offset___column__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                root: string;
+                path: string;
+                offset: number;
+                column: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

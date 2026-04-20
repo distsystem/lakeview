@@ -22,6 +22,7 @@ obstore = "*"
 fastapi = "*"
 pillow = "*"
 python-dotenv = "*"
+python-magic = "*"
 
 [pypi-dependencies]
 lakeview = { path = ".", editable = true }

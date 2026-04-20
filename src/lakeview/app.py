@@ -92,17 +92,25 @@ def get_datasets(root: str, path: str = "") -> models.DatasetListResponse:
 # -- Dataset info (with plugin detection) --
 
 
+def _column_infos(schema) -> list[models.ColumnInfo]:
+    return [
+        models.ColumnInfo(
+            name=f.name,
+            type=str(f.type),
+            nullable=f.nullable,
+            is_blob=formats.is_blob_column(f),
+        )
+        for f in schema
+    ]
+
+
 @app.get("/api/d/{root}/{path:path}/info")
 def get_info(root: str, path: str) -> models.DatasetInfoResponse:
     reader = _open_or_404(root, path)
     plugin = plugins.detect_plugin(reader.schema)
-    columns = [
-        models.ColumnInfo(name=f.name, type=str(f.type), nullable=f.nullable)
-        for f in reader.schema
-    ]
     return models.DatasetInfoResponse(
         row_count=reader.count_rows(),
-        columns=columns,
+        columns=_column_infos(reader.schema),
         plugin=plugin.name if plugin else None,
         filters=plugin.available_filters() if plugin else [],
     )
@@ -111,11 +119,7 @@ def get_info(root: str, path: str) -> models.DatasetInfoResponse:
 @app.get("/api/d/{root}/{path:path}/schema")
 def get_schema(root: str, path: str) -> models.SchemaResponse:
     reader = _open_or_404(root, path)
-    columns = [
-        models.ColumnInfo(name=f.name, type=str(f.type), nullable=f.nullable)
-        for f in reader.schema
-    ]
-    return models.SchemaResponse(columns=columns)
+    return models.SchemaResponse(columns=_column_infos(reader.schema))
 
 
 # -- Generic rows --
@@ -146,6 +150,31 @@ def get_row(root: str, path: str, offset: int) -> dict:
     if row is None:
         raise HTTPException(404, f"row not found at offset {offset}")
     return row
+
+
+@app.get("/api/d/{root}/{path:path}/blob/{offset}/{column}")
+def get_blob(root: str, path: str, offset: int, column: str) -> Response:
+    """Stream one cell's raw bytes with a detected Content-Type.
+
+    Covers v1 / v2 Lance blob columns and plain binary columns. Content-Type
+    is taken from the blob's source URI suffix when available (v2 URI-refs),
+    and falls back to magic-byte sniffing of the first bytes. Non-binary
+    columns 404.
+    """
+    reader = _open_or_404(root, path)
+    try:
+        result = reader.read_blob(offset, column)
+    except Exception as e:
+        raise HTTPException(404, f"blob not available: {e}") from e
+    if result is None:
+        raise HTTPException(404, f"blob not found: {column}@{offset}")
+    data, uri = result
+    mime = formats.detect_mime(data[:2048], uri)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 # -- Plugin-enriched views --

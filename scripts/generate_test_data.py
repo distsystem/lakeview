@@ -6,8 +6,11 @@ Usage:
     pixi run python scripts/generate_test_data.py --target s3://srgdata/lakeview --fixture fake_runs --size 50000
 
 Fixtures:
-    fake_runs    — agent_run schema (session_id, correct, error, messages, ...)
-    blob_images  — Lance Blob V2 column with small PNG images
+    fake_runs         — agent_run schema (session_id, correct, error, messages, ...)
+    blob_images       — Lance Blob v2 column with small PNG images (inline)
+    blob_uri_images   — Lance Blob v2 column where rows are file:// URI refs
+                        to sidecar PNGs written next to the dataset
+                        (local targets only)
 
 The script is idempotent per fixture (overwrites existing dataset at the
 target path). S3 writes rely on AWS_* env vars in the caller's shell.
@@ -110,52 +113,116 @@ def _png(label: str, color: tuple[int, int, int]) -> bytes:
     return buf.getvalue()
 
 
-def _blob_images_table(_n: int) -> pa.Table:
-    rows = [
-        ("red square", (220, 60, 60), "red.png"),
-        ("green square", (60, 180, 100), "green.png"),
-        ("blue square", (60, 120, 220), "blue.png"),
-        ("yellow square", (240, 200, 50), "yellow.png"),
-        ("purple square", (160, 80, 200), "purple.png"),
-    ]
+_BLOB_ROWS = [
+    ("red square", (220, 60, 60), "red.png"),
+    ("green square", (60, 180, 100), "green.png"),
+    ("blue square", (60, 120, 220), "blue.png"),
+    ("yellow square", (240, 200, 50), "yellow.png"),
+    ("purple square", (160, 80, 200), "purple.png"),
+]
+
+
+def _build_fake_runs(target: str, size: int) -> None:
+    table = _fake_runs_table(size)
+    path = f"{target.rstrip('/')}/fake_runs.lance"
+    lance.write_dataset(table, path, mode="overwrite")
+    print(f"  wrote fake_runs: {path} ({table.num_rows} rows)")
+
+
+def _build_blob_images(target: str, _size: int) -> None:
+    """Blob v2 column with inline PNG bytes."""
+    from lance import blob_array, blob_field
+
+    rows = _BLOB_ROWS
     schema = pa.schema(
         [
             pa.field("id", pa.uint64()),
             pa.field("filename", pa.string()),
             pa.field("caption", pa.string()),
-            pa.field(
-                "image",
-                pa.large_binary(),
-                metadata={"lance-encoding:blob": "true"},
-            ),
+            blob_field("image", nullable=True),
         ]
     )
-    return pa.table(
-        [
-            pa.array(range(len(rows)), pa.uint64()),
-            pa.array([r[2] for r in rows], pa.string()),
-            pa.array([r[0] for r in rows], pa.string()),
-            pa.array([_png(r[0], r[1]) for r in rows], pa.large_binary()),
-        ],
+    table = pa.table(
+        {
+            "id": pa.array(range(len(rows)), pa.uint64()),
+            "filename": [r[2] for r in rows],
+            "caption": [r[0] for r in rows],
+            "image": blob_array([_png(r[0], r[1]) for r in rows]),
+        },
         schema=schema,
     )
+    path = f"{target.rstrip('/')}/blob_images.lance"
+    lance.write_dataset(table, path, mode="overwrite", data_storage_version="2.2")
+    print(f"  wrote blob_images (v2 inline): {path} ({table.num_rows} rows)")
+
+
+def _build_blob_uri_images(target: str, _size: int) -> None:
+    """Blob v2 column where cells reference sidecar PNGs via file:// URIs.
+
+    Writes PNGs to ``{target}/blob_uri_images.files/*.png`` and registers
+    that directory as a Lance base path so the URIs resolve on read. Only
+    supported on local targets — S3 support would require uploading the
+    PNG files via obstore first, which is out of scope for this script.
+    """
+    from lance import DatasetBasePath, blob_array, blob_field
+
+    if "://" in target and not target.startswith("file://"):
+        print(f"  skipping blob_uri_images: remote target {target} not supported")
+        return
+
+    rows = _BLOB_ROWS
+    base_local = target[len("file://") :] if target.startswith("file://") else target
+    base_local = os.path.abspath(base_local.rstrip("/"))
+    files_dir = os.path.join(base_local, "blob_uri_images.files")
+    os.makedirs(files_dir, exist_ok=True)
+    uris: list[str] = []
+    for caption, color, filename in rows:
+        p = os.path.join(files_dir, filename)
+        with open(p, "wb") as f:
+            f.write(_png(caption, color))
+        uris.append(f"file://{p}")
+
+    schema = pa.schema(
+        [
+            pa.field("id", pa.uint64()),
+            pa.field("filename", pa.string()),
+            pa.field("caption", pa.string()),
+            blob_field("image", nullable=True),
+        ]
+    )
+    table = pa.table(
+        {
+            "id": pa.array(range(len(rows)), pa.uint64()),
+            "filename": [r[2] for r in rows],
+            "caption": [r[0] for r in rows],
+            "image": blob_array(uris),
+        },
+        schema=schema,
+    )
+    path = f"{base_local.rstrip('/')}/blob_uri_images.lance"
+    lance.write_dataset(
+        table,
+        path,
+        mode="overwrite",
+        data_storage_version="2.2",
+        initial_bases=[DatasetBasePath("sidecar", f"file://{files_dir}")],
+    )
+    print(f"  wrote blob_uri_images (v2 URI refs): {path} ({table.num_rows} rows)")
 
 
 # -- Driver -------------------------------------------------------------------
 
 
-FIXTURES: dict[str, tuple[Callable[[int], pa.Table], int]] = {
-    "fake_runs": (_fake_runs_table, 1000),
-    "blob_images": (_blob_images_table, 5),
+FIXTURES: dict[str, tuple[Callable[[str, int], None], int]] = {
+    "fake_runs": (_build_fake_runs, 1000),
+    "blob_images": (_build_blob_images, 5),
+    "blob_uri_images": (_build_blob_uri_images, 5),
 }
 
 
 def build(fixture: str, target: str, size: int) -> None:
     build_fn, default_size = FIXTURES[fixture]
-    table = build_fn(size or default_size)
-    path = f"{target.rstrip('/')}/{fixture}.lance"
-    lance.write_dataset(table, path, mode="overwrite")
-    print(f"  wrote {fixture}: {path} ({table.num_rows} rows)")
+    build_fn(target, size or default_size)
 
 
 def main() -> int:

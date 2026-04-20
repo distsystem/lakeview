@@ -30,9 +30,19 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RowDetail } from "@/components/generic/row-detail";
+import { BlobCell, type BlobValue } from "@/components/generic/blob-cell";
 import type { ColumnInfo } from "@/api/client";
 
-function CellRenderer({ value }: { value: unknown }) {
+function CellRenderer({
+  value,
+  blobCtx,
+}: {
+  value: unknown;
+  blobCtx?: { root: string; path: string; offset: number; column: string };
+}) {
+  if (blobCtx) {
+    return <BlobCell {...blobCtx} value={value as BlobValue} variant="thumb" />;
+  }
   if (value == null) return <span className="text-muted-foreground/50">null</span>;
   if (typeof value === "boolean") return <span>{value ? "true" : "false"}</span>;
   if (typeof value === "object") {
@@ -104,12 +114,19 @@ export function GenericTableView({
         .map((col) => ({
           accessorKey: col.name,
           header: col.name,
-          cell: ({ getValue }: { getValue: () => unknown }) => (
-            <CellRenderer value={getValue()} />
+          cell: ({ row, getValue }: { row: { index: number }; getValue: () => unknown }) => (
+            <CellRenderer
+              value={getValue()}
+              blobCtx={
+                col.is_blob
+                  ? { root, path, offset: offset + row.index, column: col.name }
+                  : undefined
+              }
+            />
           ),
         })),
     ],
-    [schema, offset],
+    [schema, offset, root, path],
   );
 
   const tableData = (data?.rows ?? []) as Record<string, unknown>[];
@@ -204,7 +221,7 @@ export function GenericTableView({
             <SheetDescription>Full row data</SheetDescription>
           </SheetHeader>
           {selectedRow !== null && (
-            <RowDetail root={root} path={path} offset={selectedRow} />
+            <RowDetail root={root} path={path} offset={selectedRow} schema={schema} />
           )}
         </SheetContent>
       </Sheet>

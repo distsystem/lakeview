@@ -39,6 +39,7 @@ class ColumnInfo(BaseModel):
     name: str
     type: str
     nullable: bool
+    is_blob: bool = False
 
 
 class SchemaResponse(BaseModel):
