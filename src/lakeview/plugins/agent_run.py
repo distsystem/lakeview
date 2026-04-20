@@ -28,15 +28,29 @@ _SESSION_ID_RE = re.compile(
 )
 _JSON_FIELDS = ("parts", "usage", "metadata")
 
-# Filter expressions pushed down to Lance. Values are Lance SQL strings.
-_FILTERS: dict[str, str | None] = {
-    "all": None,
-    "ok": "correct = true AND error IS NULL",
-    "wrong": "correct = false AND error IS NULL",
-    "error": "error IS NOT NULL",
-    "pending": "correct IS NULL AND error IS NULL",
-}
 _SIDEBAR_COLS = ["session_id", "correct", "error", "output", "metadata"]
+_FILTER_KEYS = ("all", "ok", "wrong", "error", "pending")
+
+
+def _masks(tbl: pa.Table) -> dict[str, pa.ChunkedArray | None]:
+    """Boolean masks per filter key over the light columns table."""
+    correct = tbl["correct"]
+    has_err = pc.is_valid(tbl["error"])
+    no_err = pc.invert(has_err)
+    correct_true = pc.equal(correct, True)
+    correct_false = pc.equal(correct, False)
+    correct_null = pc.invert(pc.is_valid(correct))
+    return {
+        "all": None,
+        "ok": pc.and_kleene(correct_true, no_err),
+        "wrong": pc.and_kleene(correct_false, no_err),
+        "error": has_err,
+        "pending": pc.and_kleene(correct_null, no_err),
+    }
+
+
+def _count(mask) -> int:
+    return int(pc.sum(pc.cast(mask, pa.int64())).as_py() or 0)
 
 
 def _decode_json(row: dict) -> dict:
@@ -64,25 +78,22 @@ class AgentRunPlugin(SchemaPlugin):
     SCHEMA = AgentRunSchema
 
     def available_filters(self) -> list[str]:
-        return list(_FILTERS)
+        return list(_FILTER_KEYS)
 
-    def summarize(self, reader: DatasetReader) -> AgentRunStats:
-        """One scan of (correct, error) + vectorized Arrow aggregates."""
-        tbl = reader.to_arrow(columns=["correct", "error"])
+    def view(
+        self, reader: DatasetReader, filter_key: str, offset: int, limit: int
+    ) -> tuple[AgentRunStats, int, list[AgentRunSidebar]]:
+        """Single scan of the light columns; compute stats + filter + page
+        entirely in Arrow compute. One S3 round-trip for the whole request."""
+        tbl = reader.to_arrow(columns=_SIDEBAR_COLS)
+        masks = _masks(tbl)
+
         total = tbl.num_rows
-        correct = tbl["correct"].combine_chunks()
-        has_err = pc.is_valid(tbl["error"].combine_chunks())
-        no_err = pc.invert(has_err)
-
-        def count(mask) -> int:
-            return int(pc.sum(pc.cast(mask, pa.int64())).as_py() or 0)
-
-        error_n = count(has_err)
-        ok = count(pc.and_kleene(pc.equal(correct, True), no_err))
-        wrong = count(pc.and_kleene(pc.equal(correct, False), no_err))
+        ok = _count(masks["ok"])
+        wrong = _count(masks["wrong"])
+        error_n = _count(masks["error"])
         pending = total - ok - wrong - error_n
-
-        return AgentRunStats(
+        stats = AgentRunStats(
             total=total,
             ok=ok,
             wrong=wrong,
@@ -91,14 +102,9 @@ class AgentRunPlugin(SchemaPlugin):
             accuracy=ok / total if total else None,
         )
 
-    def page(
-        self, reader: DatasetReader, filter_key: str, offset: int, limit: int
-    ) -> tuple[int, list[AgentRunSidebar]]:
-        predicate = _FILTERS.get(filter_key, None)
-        total = reader.count_rows(filter=predicate)
-        rows = reader.scan(
-            offset=offset, limit=limit, columns=_SIDEBAR_COLS, filter=predicate
-        )
+        mask = masks.get(filter_key)
+        filtered = tbl if mask is None else tbl.filter(mask)
+        page = filtered.slice(offset, limit)
         sidebars = [
             AgentRunSidebar(
                 row_offset=offset + i,
@@ -108,9 +114,9 @@ class AgentRunPlugin(SchemaPlugin):
                 output=r.get("output"),
                 metadata=r.get("metadata"),
             )
-            for i, r in enumerate(rows)
+            for i, r in enumerate(page.to_pylist())
         ]
-        return total, sidebars
+        return stats, filtered.num_rows, sidebars
 
     def detail(self, reader: DatasetReader, key: str) -> AgentRunDetail | None:
         row: dict | None

@@ -30,15 +30,15 @@ class SchemaPlugin:
     def available_filters(self) -> list[str]:
         return ["all"]
 
-    def summarize(self, reader: DatasetReader) -> BaseModel | None:
-        """Compute stats across the dataset. Plugins push aggregation down to
-        Lance / Arrow compute instead of materializing rows."""
-        return None
-
-    def page(
+    def view(
         self, reader: DatasetReader, filter_key: str, offset: int, limit: int
-    ) -> tuple[int, list[BaseModel]]:
-        """Return (total_matching_rows, page_rows)."""
+    ) -> tuple[BaseModel | None, int, list[BaseModel]]:
+        """Return ``(stats, filtered_total, page_rows)`` in a single pass.
+
+        Plugins should typically do **one** scan of their light columns and
+        compute stats + filter + page via Arrow compute, so remote datasets
+        don't pay latency for multiple scanner round-trips.
+        """
         raise NotImplementedError
 
     def detail(self, reader: DatasetReader, key: str) -> BaseModel | None:

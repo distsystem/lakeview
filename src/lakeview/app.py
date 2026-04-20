@@ -149,8 +149,7 @@ def get_view(
     if not plugin:
         raise HTTPException(404, "no plugin detected for this schema")
 
-    total, rows = plugin.page(reader, filter, offset, limit)
-    stats = plugin.summarize(reader)
+    stats, total, rows = plugin.view(reader, filter, offset, limit)
     return models.PluginViewResponse(
         total=total,
         offset=offset,
