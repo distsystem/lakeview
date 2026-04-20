@@ -21,6 +21,7 @@ hatchling = "*"
 obstore = "*"
 fastapi = "*"
 pillow = "*"
+python-dotenv = "*"
 
 [pypi-dependencies]
 lakeview = { path = ".", editable = true }

@@ -1,51 +1,65 @@
-"""Storage layer — URI-based browse and file access via obstore.
+"""Storage layer — root-relative browse via obstore.
 
-Any input with a URI scheme (`s3://`, `gs://`, `file://`, ...) is passed
-through to obstore; bare paths are treated as local filesystem paths and
-resolved to absolute directories before use.
+Roots are declared at startup from the environment:
+  - ``s3``: ``s3://$S3_BUCKET/$S3_PREFIX`` (when both are set)
+  - ``local``: the server's cwd
+
+Downstream code always works in terms of ``(root, rel)`` pairs. The root
+name maps to a base URI; ``rel`` is joined underneath. Raw schemes and
+double-slashes never enter URLs.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import obstore as obs
+from dotenv import load_dotenv
 from obstore.store import LocalStore, from_url
 
 from lakeview.models import DatasetEntry
 
+# Auto-load repo-root .env for dev. In prod the orchestrator sets env vars
+# directly so this is a no-op.
+load_dotenv()
 
-def _has_scheme(uri: str) -> bool:
-    return "://" in uri
+
+def _load_roots() -> dict[str, str]:
+    roots: dict[str, str] = {}
+    bucket = os.environ.get("S3_BUCKET")
+    prefix = os.environ.get("S3_PREFIX")
+    if bucket and prefix:
+        roots["s3"] = f"s3://{bucket}/{prefix}"
+    roots["local"] = str(Path.cwd())
+    return roots
+
+
+_ROOTS = _load_roots()
+
+
+def roots() -> dict[str, str]:
+    """Map of configured root names to their absolute base URI."""
+    return dict(_ROOTS)
+
+
+def resolve(root: str, rel: str = "") -> str | None:
+    """Expand a ``(root, rel)`` pair into the absolute URI obstore wants."""
+    base = _ROOTS.get(root)
+    if base is None:
+        return None
+    rel = rel.strip("/")
+    return f"{base}/{rel}" if rel else base
 
 
 def _open_dir(uri: str):
-    if _has_scheme(uri):
-        return from_url(uri)
-    return LocalStore(uri)
+    return from_url(uri) if "://" in uri else LocalStore(uri)
 
 
-def _resolve_local(path: str, kind: str) -> str | None:
-    check = Path.is_dir if kind == "dir" else Path.is_file
-    for candidate in (path, f"/{path}"):
-        if check(Path(candidate)):
-            return candidate
-    return None
-
-
-def resolve_dir(uri: str) -> str | None:
-    """Canonicalize a browse target or return None if it doesn't exist."""
-    uri = uri.rstrip("/")
-    if not uri:
-        return None
-    if _has_scheme(uri):
-        return uri
-    return _resolve_local(uri, "dir")
-
-
-def open_store(uri: str):
-    """Open an obstore rooted at a directory URI."""
-    return _open_dir(uri)
+def open_store(root: str, rel: str = ""):
+    """Open an obstore rooted at ``(root, rel)``."""
+    uri = resolve(root, rel)
+    return _open_dir(uri) if uri is not None else None
 
 
 class Probe:
@@ -76,65 +90,65 @@ class Probe:
         return hit
 
 
-def list_entries(uri: str) -> tuple[str, list[DatasetEntry]]:
-    """List 1 level under `uri`. Returns (resolved_uri, entries)."""
-    if not uri:
-        return "", []
-    resolved = resolve_dir(uri)
-    if resolved is None:
-        return uri, []
-
+def list_entries(root: str, rel: str = "") -> list[DatasetEntry]:
+    """List 1 level under ``(root, rel)``. Entry paths are relative to root."""
+    uri = resolve(root, rel)
+    if uri is None:
+        return []
     try:
-        store = _open_dir(resolved)
+        store = _open_dir(uri)
         result = obs.list_with_delimiter(store)
     except Exception:
-        return resolved, []
+        return []
 
+    rel = rel.strip("/")
     entries: list[DatasetEntry] = []
     for prefix in result.get("common_prefixes", []):
         name = prefix.rstrip("/").rsplit("/", 1)[-1]
         if not name or name.startswith((".", "_")):
             continue
         entries.append(
-            DatasetEntry(name=name, path=f"{resolved}/{name}", kind="directory")
+            DatasetEntry(
+                name=name,
+                path=f"{rel}/{name}" if rel else name,
+                kind="directory",
+            )
         )
-
     for meta in result.get("objects", []):
-        path = str(meta.get("path") or "")
-        name = path.rsplit("/", 1)[-1]
+        p = str(meta.get("path") or "")
+        name = p.rsplit("/", 1)[-1]
         if not name or name.startswith("."):
             continue
         entries.append(
             DatasetEntry(
                 name=name,
-                path=f"{resolved}/{name}",
+                path=f"{rel}/{name}" if rel else name,
                 kind="file",
                 size=meta.get("size"),
             )
         )
-
     entries.sort(key=lambda e: (e.kind == "file", e.name))
-    return resolved, entries
+    return entries
 
 
-def read_file(uri: str, max_bytes: int) -> tuple[bytes, int] | None:
+def read_file(root: str, rel: str, max_bytes: int) -> tuple[bytes, int] | None:
     """Read a file's contents. Returns (bytes, size) or None if not found.
 
-    Raises ValueError if the file exceeds `max_bytes`.
+    Raises ValueError if the file exceeds ``max_bytes``.
     """
-    target = uri if _has_scheme(uri) else _resolve_local(uri, "file")
-    if target is None:
-        return None
-    parent, _, name = target.rpartition("/")
+    parent_rel, _, name = rel.rpartition("/")
     if not name:
         return None
+    parent_uri = resolve(root, parent_rel)
+    if parent_uri is None:
+        return None
     try:
-        store = _open_dir(parent)
+        store = _open_dir(parent_uri)
         meta = obs.head(store, name)
     except Exception:
         return None
     size = meta.get("size") or 0
     if size > max_bytes:
-        raise ValueError(f"file too large: {target} ({size} > {max_bytes})")
+        raise ValueError(f"file too large: {root}/{rel} ({size} > {max_bytes})")
     data = obs.get(store, name).bytes()
     return bytes(data), size

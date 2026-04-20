@@ -4,7 +4,24 @@
  */
 
 export interface paths {
-    "/api/file/{path}": {
+    "/api/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Roots */
+        get: operations["get_roots_api_roots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/file/{root}/{path}": {
         parameters: {
             query?: never;
             header?: never;
@@ -13,9 +30,9 @@ export interface paths {
         };
         /**
          * Get File
-         * @description Serve raw file bytes from any storage backend, for preview in the frontend.
+         * @description Serve raw file bytes from any root, for preview in the frontend.
          */
-        get: operations["get_file_api_file__path__get"];
+        get: operations["get_file_api_file__root___path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -41,7 +58,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/d/{db_path}/info": {
+    "/api/d/{root}/{path}/info": {
         parameters: {
             query?: never;
             header?: never;
@@ -49,7 +66,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Info */
-        get: operations["get_info_api_d__db_path__info_get"];
+        get: operations["get_info_api_d__root___path__info_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -58,7 +75,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/d/{db_path}/schema": {
+    "/api/d/{root}/{path}/schema": {
         parameters: {
             query?: never;
             header?: never;
@@ -66,7 +83,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Schema */
-        get: operations["get_schema_api_d__db_path__schema_get"];
+        get: operations["get_schema_api_d__root___path__schema_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -75,7 +92,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/d/{db_path}/rows": {
+    "/api/d/{root}/{path}/rows": {
         parameters: {
             query?: never;
             header?: never;
@@ -83,7 +100,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Rows */
-        get: operations["get_rows_api_d__db_path__rows_get"];
+        get: operations["get_rows_api_d__root___path__rows_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -92,7 +109,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/d/{db_path}/row/{offset}": {
+    "/api/d/{root}/{path}/row/{offset}": {
         parameters: {
             query?: never;
             header?: never;
@@ -100,7 +117,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Row */
-        get: operations["get_row_api_d__db_path__row__offset__get"];
+        get: operations["get_row_api_d__root___path__row__offset__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -109,7 +126,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/d/{db_path}/view": {
+    "/api/d/{root}/{path}/view": {
         parameters: {
             query?: never;
             header?: never;
@@ -117,7 +134,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get View */
-        get: operations["get_view_api_d__db_path__view_get"];
+        get: operations["get_view_api_d__root___path__view_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -126,7 +143,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/d/{db_path}/view/{key}": {
+    "/api/d/{root}/{path}/view/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -134,7 +151,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get View Detail */
-        get: operations["get_view_detail_api_d__db_path__view__key__get"];
+        get: operations["get_view_detail_api_d__root___path__view__key__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -226,8 +243,10 @@ export interface components {
         };
         /** DatasetListResponse */
         DatasetListResponse: {
-            /** Prefix */
-            prefix: string;
+            /** Root */
+            root: string;
+            /** Path */
+            path: string;
             /** Datasets */
             datasets: components["schemas"]["DatasetEntry"][];
         };
@@ -269,6 +288,20 @@ export interface components {
             /** Plugin */
             plugin: string;
         };
+        /** RootInfo */
+        RootInfo: {
+            /** Name */
+            name: string;
+            /** Uri */
+            uri: string;
+        };
+        /** RootsResponse */
+        RootsResponse: {
+            /** Roots */
+            roots: components["schemas"]["RootInfo"][];
+            /** Default */
+            default: string;
+        };
         /** SchemaResponse */
         SchemaResponse: {
             /** Columns */
@@ -296,11 +329,32 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_file_api_file__path__get: {
+    get_roots_api_roots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootsResponse"];
+                };
+            };
+        };
+    };
+    get_file_api_file__root___path__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                root: string;
                 path: string;
             };
             cookie?: never;
@@ -329,8 +383,9 @@ export interface operations {
     };
     get_datasets_api_datasets_get: {
         parameters: {
-            query?: {
-                prefix?: string;
+            query: {
+                root: string;
+                path?: string;
             };
             header?: never;
             path?: never;
@@ -358,12 +413,13 @@ export interface operations {
             };
         };
     };
-    get_info_api_d__db_path__info_get: {
+    get_info_api_d__root___path__info_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                db_path: string;
+                root: string;
+                path: string;
             };
             cookie?: never;
         };
@@ -389,12 +445,13 @@ export interface operations {
             };
         };
     };
-    get_schema_api_d__db_path__schema_get: {
+    get_schema_api_d__root___path__schema_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                db_path: string;
+                root: string;
+                path: string;
             };
             cookie?: never;
         };
@@ -420,7 +477,7 @@ export interface operations {
             };
         };
     };
-    get_rows_api_d__db_path__rows_get: {
+    get_rows_api_d__root___path__rows_get: {
         parameters: {
             query?: {
                 offset?: number;
@@ -428,7 +485,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                db_path: string;
+                root: string;
+                path: string;
             };
             cookie?: never;
         };
@@ -454,12 +512,13 @@ export interface operations {
             };
         };
     };
-    get_row_api_d__db_path__row__offset__get: {
+    get_row_api_d__root___path__row__offset__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                db_path: string;
+                root: string;
+                path: string;
                 offset: number;
             };
             cookie?: never;
@@ -488,7 +547,7 @@ export interface operations {
             };
         };
     };
-    get_view_api_d__db_path__view_get: {
+    get_view_api_d__root___path__view_get: {
         parameters: {
             query?: {
                 offset?: number;
@@ -497,7 +556,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                db_path: string;
+                root: string;
+                path: string;
             };
             cookie?: never;
         };
@@ -523,12 +583,13 @@ export interface operations {
             };
         };
     };
-    get_view_detail_api_d__db_path__view__key__get: {
+    get_view_detail_api_d__root___path__view__key__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                db_path: string;
+                root: string;
+                path: string;
                 key: string;
             };
             cookie?: never;

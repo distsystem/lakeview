@@ -5,19 +5,33 @@ from typing import Any
 from pydantic import BaseModel
 
 
+# -- Roots --
+
+
+class RootInfo(BaseModel):
+    name: str  # short id used in URLs: "s3", "local"
+    uri: str  # absolute base the root resolves to (for display)
+
+
+class RootsResponse(BaseModel):
+    roots: list[RootInfo]
+    default: str  # first-configured root name
+
+
 # -- Dataset browsing --
 
 
 class DatasetEntry(BaseModel):
     name: str
-    path: str
+    path: str  # relative to the current root
     kind: str  # "lance", "parquet", "delta", "iceberg", "directory", "file"
     row_count: int | None = None
     size: int | None = None  # bytes, only for "file"
 
 
 class DatasetListResponse(BaseModel):
-    prefix: str
+    root: str
+    path: str  # relative prefix within the root
     datasets: list[DatasetEntry]
 
 
