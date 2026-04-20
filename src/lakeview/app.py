@@ -159,9 +159,7 @@ def get_view(
     stats = plugin.summarize_rows(all_rows)
     filtered = plugin.filter_rows(all_rows, filter)
     page = filtered[offset : offset + limit]
-    sidebar_rows = [
-        plugin.sidebar_row(r) | {"row_offset": r["row_offset"]} for r in page
-    ]
+    sidebar_rows = [plugin.sidebar_row(r, row_offset=r["row_offset"]) for r in page]
 
     return models.PluginViewResponse(
         total=len(filtered),

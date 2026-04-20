@@ -1,7 +1,6 @@
-"""Pydantic response models — the API contract.
+"""Pydantic response models — the API contract."""
 
-Generic models only. Plugin-specific data is returned as opaque dicts.
-"""
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -32,17 +31,11 @@ class SchemaResponse(BaseModel):
     columns: list[ColumnInfo]
 
 
-# -- Dataset info (with plugin detection) --
-
-
 class DatasetInfoResponse(BaseModel):
     row_count: int
     columns: list[ColumnInfo]
     plugin: str | None = None
     filters: list[str] = []
-
-
-# -- Generic rows --
 
 
 class GenericRowListResponse(BaseModel):
@@ -52,6 +45,32 @@ class GenericRowListResponse(BaseModel):
     rows: list[dict]
 
 
+# -- Agent-run plugin outputs --
+
+
+class AgentRunStats(BaseModel):
+    total: int
+    ok: int
+    wrong: int
+    error: int
+    pending: int
+    accuracy: float | None = None
+
+
+class AgentRunSidebar(BaseModel):
+    row_offset: int
+    session_id: str | None = None
+    correct: bool | None = None
+    error: str | None = None
+    output: Any | None = None
+    metadata: Any | None = None
+
+
+class AgentRunDetail(BaseModel):
+    row: dict
+    messages: list[dict]
+
+
 # -- Plugin-enriched views --
 
 
@@ -59,11 +78,11 @@ class PluginViewResponse(BaseModel):
     total: int
     offset: int
     limit: int
-    rows: list[dict]
-    stats: dict | None = None
+    rows: list[AgentRunSidebar]
+    stats: AgentRunStats | None = None
     plugin: str
 
 
 class PluginDetailResponse(BaseModel):
     plugin: str
-    data: dict
+    data: AgentRunDetail

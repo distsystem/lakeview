@@ -6,6 +6,7 @@ from typing import ClassVar
 
 import pyarrow as pa
 from lancedb.pydantic import LanceModel
+from pydantic import BaseModel
 
 from lakeview.formats import DatasetReader
 
@@ -29,17 +30,17 @@ class SchemaPlugin:
     def available_filters(self) -> list[str]:
         return ["all"]
 
-    def summarize_rows(self, rows: list[dict]) -> dict:
-        return {}
+    def summarize_rows(self, rows: list[dict]) -> BaseModel | None:
+        return None
 
     def filter_rows(self, rows: list[dict], filter_key: str) -> list[dict]:
         return rows
 
-    def sidebar_row(self, row: dict) -> dict:
-        return row
+    def sidebar_row(self, row: dict, row_offset: int) -> BaseModel:
+        raise NotImplementedError
 
-    def detail(self, reader: DatasetReader, offset: int) -> dict | None:
-        return reader.get_row(offset)
+    def detail(self, reader: DatasetReader, offset: int) -> BaseModel | None:
+        raise NotImplementedError
 
 
 from lakeview.plugins.agent_run import AgentRunPlugin  # noqa: E402

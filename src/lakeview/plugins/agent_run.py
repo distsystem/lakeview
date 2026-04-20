@@ -9,6 +9,7 @@ from typing import Any
 from lancedb.pydantic import LanceModel
 
 from lakeview.formats import DatasetReader
+from lakeview.models import AgentRunDetail, AgentRunSidebar, AgentRunStats
 from lakeview.plugins import SchemaPlugin
 
 
@@ -53,20 +54,20 @@ class AgentRunPlugin(SchemaPlugin):
     def available_filters(self) -> list[str]:
         return ["all", "ok", "wrong", "error", "pending"]
 
-    def summarize_rows(self, rows: list[dict]) -> dict:
+    def summarize_rows(self, rows: list[dict]) -> AgentRunStats:
         total = len(rows)
         ok = sum(1 for r in rows if r.get("correct") is True)
         error = sum(1 for r in rows if r.get("error"))
         wrong = sum(1 for r in rows if not r.get("error") and r.get("correct") is False)
         pending = total - ok - wrong - error
-        return {
-            "total": total,
-            "ok": ok,
-            "wrong": wrong,
-            "error": error,
-            "pending": pending,
-            "accuracy": ok / total if total else None,
-        }
+        return AgentRunStats(
+            total=total,
+            ok=ok,
+            wrong=wrong,
+            error=error,
+            pending=pending,
+            accuracy=ok / total if total else None,
+        )
 
     def filter_rows(self, rows: list[dict], filter_key: str) -> list[dict]:
         if filter_key in ("all", "", None):
@@ -80,22 +81,22 @@ class AgentRunPlugin(SchemaPlugin):
         check = checks.get(filter_key)
         return [r for r in rows if check(r)] if check else rows
 
-    def sidebar_row(self, row: dict) -> dict:
-        return {
-            "session_id": row.get("session_id"),
-            "correct": row.get("correct"),
-            "error": row.get("error"),
-            "output": row.get("output"),
-            "metadata": row.get("metadata"),
-        }
+    def sidebar_row(self, row: dict, row_offset: int) -> AgentRunSidebar:
+        return AgentRunSidebar(
+            row_offset=row_offset,
+            session_id=row.get("session_id"),
+            correct=row.get("correct"),
+            error=row.get("error"),
+            output=row.get("output"),
+            metadata=row.get("metadata"),
+        )
 
-    def detail(self, reader: DatasetReader, offset: int) -> dict | None:
+    def detail(self, reader: DatasetReader, offset: int) -> AgentRunDetail | None:
         row = reader.get_row(offset)
         if row is None:
             return None
         raw_messages = row.pop("messages", None) or []
-        messages = _decode_messages(raw_messages)
-        return {"row": row, "messages": messages}
+        return AgentRunDetail(row=row, messages=_decode_messages(raw_messages))
 
     def resolve_key(self, reader: DatasetReader, key: str) -> int | None:
         """Resolve a session_id or numeric offset to a row offset."""
