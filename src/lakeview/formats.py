@@ -13,13 +13,22 @@ class DatasetReader(typing.Protocol):
     @property
     def schema(self) -> pa.Schema: ...
 
-    def count_rows(self) -> int: ...
+    def count_rows(self, filter: str | None = None) -> int: ...
+
+    def to_arrow(
+        self,
+        offset: int = 0,
+        limit: int | None = None,
+        columns: list[str] | None = None,
+        filter: str | None = None,
+    ) -> pa.Table: ...
 
     def scan(
         self,
         offset: int = 0,
         limit: int = 50,
         columns: list[str] | None = None,
+        filter: str | None = None,
     ) -> list[dict]: ...
 
     def get_row(self, offset: int) -> dict | None: ...
@@ -70,17 +79,30 @@ class LanceReader:
     def schema(self):
         return self._ds.schema
 
-    def count_rows(self) -> int:
-        return self._ds.count_rows()
+    def count_rows(self, filter: str | None = None) -> int:
+        return self._ds.count_rows(filter=filter) if filter else self._ds.count_rows()
+
+    def to_arrow(
+        self,
+        offset: int = 0,
+        limit: int | None = None,
+        columns: list[str] | None = None,
+        filter: str | None = None,
+    ) -> pa.Table:
+        return self._ds.to_table(
+            offset=offset, limit=limit, columns=columns, filter=filter
+        )
 
     def scan(
         self,
         offset: int = 0,
         limit: int = 50,
         columns: list[str] | None = None,
+        filter: str | None = None,
     ) -> list[dict]:
-        tbl = self._ds.to_table(offset=offset, limit=limit, columns=columns)
-        return tbl.to_pylist()
+        return self.to_arrow(
+            offset=offset, limit=limit, columns=columns, filter=filter
+        ).to_pylist()
 
     def get_row(self, offset: int) -> dict | None:
         tbl = self._ds.to_table(offset=offset, limit=1)

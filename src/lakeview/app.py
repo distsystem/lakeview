@@ -149,23 +149,13 @@ def get_view(
     if not plugin:
         raise HTTPException(404, "no plugin detected for this schema")
 
-    # Load all rows (excluding heavy columns) for filtering + stats
-    exclude = {"messages"}
-    cols = [f.name for f in reader.schema if f.name not in exclude]
-    all_rows = reader.scan(0, reader.count_rows(), columns=cols)
-    for i, r in enumerate(all_rows):
-        r["row_offset"] = i
-
-    stats = plugin.summarize_rows(all_rows)
-    filtered = plugin.filter_rows(all_rows, filter)
-    page = filtered[offset : offset + limit]
-    sidebar_rows = [plugin.sidebar_row(r, row_offset=r["row_offset"]) for r in page]
-
+    total, rows = plugin.page(reader, filter, offset, limit)
+    stats = plugin.summarize(reader)
     return models.PluginViewResponse(
-        total=len(filtered),
+        total=total,
         offset=offset,
         limit=limit,
-        rows=sidebar_rows,
+        rows=rows,
         stats=stats,
         plugin=plugin.name,
     )
@@ -177,15 +167,7 @@ def get_view_detail(db_path: str, key: str) -> models.PluginDetailResponse:
     plugin = plugins.detect_plugin(reader.schema)
     if not plugin:
         raise HTTPException(404, "no plugin detected for this schema")
-
-    offset = getattr(
-        plugin, "resolve_key", lambda r, k: int(k) if k.isdigit() else None
-    )(reader, key)
-    if offset is None:
-        raise HTTPException(404, f"run not found: {key}")
-
-    data = plugin.detail(reader, offset)
+    data = plugin.detail(reader, key)
     if data is None:
-        raise HTTPException(404, f"run not found at offset {offset}")
-
+        raise HTTPException(404, f"run not found: {key}")
     return models.PluginDetailResponse(plugin=plugin.name, data=data)

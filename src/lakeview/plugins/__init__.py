@@ -30,16 +30,19 @@ class SchemaPlugin:
     def available_filters(self) -> list[str]:
         return ["all"]
 
-    def summarize_rows(self, rows: list[dict]) -> BaseModel | None:
+    def summarize(self, reader: DatasetReader) -> BaseModel | None:
+        """Compute stats across the dataset. Plugins push aggregation down to
+        Lance / Arrow compute instead of materializing rows."""
         return None
 
-    def filter_rows(self, rows: list[dict], filter_key: str) -> list[dict]:
-        return rows
-
-    def sidebar_row(self, row: dict, row_offset: int) -> BaseModel:
+    def page(
+        self, reader: DatasetReader, filter_key: str, offset: int, limit: int
+    ) -> tuple[int, list[BaseModel]]:
+        """Return (total_matching_rows, page_rows)."""
         raise NotImplementedError
 
-    def detail(self, reader: DatasetReader, offset: int) -> BaseModel | None:
+    def detail(self, reader: DatasetReader, key: str) -> BaseModel | None:
+        """Resolve `key` (session id, offset, ...) to a detail record."""
         raise NotImplementedError
 
 
