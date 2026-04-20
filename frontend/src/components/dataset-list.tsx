@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useDatasets } from "@/hooks/use-datasets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,21 +38,26 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
-  const [searchParams] = useSearchParams();
-  const queryPrefix = searchParams.get("prefix");
-  const initial = routePrefix || queryPrefix || "";
-  const [input, setInput] = useState(initial);
-  const [prefix, setPrefix] = useState(initial);
+function joinPath(root: string, path: string): string {
+  return path ? `/${root}/${path}` : `/${root}`;
+}
+
+export function DatasetList({
+  root,
+  path,
+}: {
+  root: string;
+  path: string;
+}) {
+  const [input, setInput] = useState(path);
   const [filter, setFilter] = useState("");
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { data, isLoading } = useDatasets(prefix);
+  const { data, isLoading } = useDatasets(root, path);
 
-  const effectivePrefix = routePrefix || queryPrefix;
-  if (effectivePrefix && effectivePrefix !== prefix) {
-    setPrefix(effectivePrefix);
-    setInput(effectivePrefix);
+  // Keep input in sync when URL-driven path changes.
+  if (input !== path && document.activeElement?.tagName !== "INPUT") {
+    setInput(path);
   }
 
   const datasets = data?.datasets ?? [];
@@ -63,19 +68,18 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <PathBreadcrumb path={prefix} />
+        <PathBreadcrumb root={root} path={path} />
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            navigate(`/?prefix=${encodeURIComponent(input)}`);
-            setPrefix(input);
+            navigate(joinPath(root, input.replace(/^\/+|\/+$/g, "")));
           }}
           className="flex gap-2 shrink-0"
         >
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="path or s3://bucket/prefix"
+            placeholder="relative path…"
             className="font-mono text-xs w-72"
           />
           <Button type="submit" size="sm">Go</Button>
@@ -132,10 +136,10 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
                   ? "text-muted-foreground"
                   : "text-amber-500";
 
-                // Primary action per row type
+                const entryHref = joinPath(root, ds.path);
+
                 const onPrimary = () => {
-                  if (isLance) navigate(`/${encodeURIComponent(ds.path)}`);
-                  else if (isDir) navigate(`/?prefix=${encodeURIComponent(ds.path)}`);
+                  if (isLance || isDir) navigate(entryHref);
                   else if (isFile) setPreviewPath(ds.path);
                 };
 
@@ -156,9 +160,7 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
                         <Icon className={cn("size-4 shrink-0", iconColor)} />
                         {isLance || isDir ? (
                           <Link
-                            to={isLance
-                              ? `/${encodeURIComponent(ds.path)}`
-                              : `/?prefix=${encodeURIComponent(ds.path)}`}
+                            to={entryHref}
                             className="no-underline hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -191,14 +193,14 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
                                 className="opacity-0 group-hover:opacity-100 transition-opacity"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/?prefix=${encodeURIComponent(ds.path)}`);
+                                  navigate(entryHref);
                                 }}
                               >
                                 <FolderOpen className="size-3.5" />
                               </Button>
                             }
                           />
-                          <TooltipContent>Browse as folder</TooltipContent>
+                          <TooltipContent>Open</TooltipContent>
                         </Tooltip>
                       )}
                     </TableCell>
@@ -208,7 +210,7 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
             {!isLoading && filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground py-8 text-sm">
-                  {filter ? "No matches" : `No entries under: ${prefix}`}
+                  {filter ? "No matches" : `No entries under: ${root}/${path}`}
                 </TableCell>
               </TableRow>
             )}
@@ -230,7 +232,7 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
             </SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-4">
-            {previewPath && <FilePreview path={previewPath} />}
+            {previewPath && <FilePreview root={root} path={previewPath} />}
           </div>
         </SheetContent>
       </Sheet>

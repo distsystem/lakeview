@@ -21,17 +21,19 @@ function JsonValue({ value }: { value: unknown }) {
 }
 
 export function RowDetail({
-  dbPath,
+  root,
+  path,
   offset,
 }: {
-  dbPath: string;
+  root: string;
+  path: string;
   offset: number;
 }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["row", dbPath, offset],
+    queryKey: ["row", root, path, offset],
     queryFn: async () => {
-      const { data } = await api.GET("/api/d/{db_path}/row/{offset}", {
-        params: { path: { db_path: dbPath, offset } },
+      const { data } = await api.GET("/api/d/{root}/{path}/row/{offset}", {
+        params: { path: { root, path, offset } },
       });
       return data!;
     },

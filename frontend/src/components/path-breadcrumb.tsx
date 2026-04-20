@@ -9,28 +9,22 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-function splitSegments(path: string): string[] {
-  // Keep `s3://bucket` as one segment so re-joining can't collapse `//`.
-  if (path.startsWith("s3://")) {
-    const [bucket, ...rest] = path.slice("s3://".length).split("/").filter(Boolean);
-    return bucket ? [`s3://${bucket}`, ...rest] : [];
-  }
-  return path.split("/").filter(Boolean);
-}
-
-export function PathBreadcrumb({ path }: { path: string }) {
-  const segments = splitSegments(path);
+export function PathBreadcrumb({ root, path }: { root: string; path: string }) {
+  // Clean path splits — no scheme, no `//`, no encoding gymnastics.
+  const segments = path.split("/").filter(Boolean);
 
   return (
     <Breadcrumb>
       <BreadcrumbList className="text-sm">
         <BreadcrumbItem>
           {segments.length === 0 ? (
-            <BreadcrumbPage className="font-mono">~</BreadcrumbPage>
+            <BreadcrumbPage className="font-mono">{root}</BreadcrumbPage>
           ) : (
             <BreadcrumbLink
               render={
-                <Link to="/" className="font-mono no-underline">~</Link>
+                <Link to={`/${root}`} className="font-mono no-underline">
+                  {root}
+                </Link>
               }
             />
           )}
@@ -48,7 +42,7 @@ export function PathBreadcrumb({ path }: { path: string }) {
                   <BreadcrumbLink
                     render={
                       <Link
-                        to={`/?prefix=${encodeURIComponent(partial)}`}
+                        to={`/${root}/${partial}`}
                         className="font-mono no-underline"
                       >
                         {seg}

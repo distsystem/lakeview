@@ -77,15 +77,17 @@ function TableSkeleton() {
 const PAGE_SIZE = 50;
 
 export function GenericTableView({
-  dbPath,
+  root,
+  path,
   schema,
 }: {
-  dbPath: string;
+  root: string;
+  path: string;
   schema: ColumnInfo[];
 }) {
   const [offset, setOffset] = useState(0);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
-  const { data, isLoading } = useRows(dbPath, offset, PAGE_SIZE);
+  const { data, isLoading } = useRows(root, path, offset, PAGE_SIZE);
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
@@ -202,7 +204,7 @@ export function GenericTableView({
             <SheetDescription>Full row data</SheetDescription>
           </SheetHeader>
           {selectedRow !== null && (
-            <RowDetail dbPath={dbPath} offset={selectedRow} />
+            <RowDetail root={root} path={path} offset={selectedRow} />
           )}
         </SheetContent>
       </Sheet>

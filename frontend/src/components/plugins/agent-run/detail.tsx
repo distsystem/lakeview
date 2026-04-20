@@ -278,13 +278,15 @@ function ErrorDisplay({ error }: { error: string }) {
 // -- Main detail component --
 
 export function AgentRunDetail({
-  dbPath,
+  root,
+  path,
   runKey,
 }: {
-  dbPath: string;
+  root: string;
+  path: string;
   runKey: string;
 }) {
-  const { data, isLoading, error } = usePluginDetail(dbPath, runKey);
+  const { data, isLoading, error } = usePluginDetail(root, path, runKey);
 
   if (isLoading)
     return (

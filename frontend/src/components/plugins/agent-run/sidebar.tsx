@@ -70,11 +70,13 @@ function uuid7Time(sid: string | null | undefined): string {
 
 function RunCard({
   row,
-  dbPath,
+  root,
+  path,
   selected,
 }: {
   row: RowData;
-  dbPath: string;
+  root: string;
+  path: string;
   selected: boolean;
 }) {
   const label = uuid7Time(row.session_id) || `#${row.row_offset}`;
@@ -85,7 +87,7 @@ function RunCard({
 
   return (
     <Link
-      to={`/${dbPath}/r/${row.session_id ?? row.row_offset}`}
+      to={`/${root}/${path}/r/${row.session_id ?? row.row_offset}`}
       className="no-underline block"
     >
       <Card
@@ -138,16 +140,18 @@ function RunCard({
 const STATUSES = ["all", "ok", "wrong", "error", "pending"] as const;
 
 export function AgentRunSidebar({
-  dbPath,
+  root,
+  path,
   selectedKey,
 }: {
-  dbPath: string;
+  root: string;
+  path: string;
   selectedKey?: string | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const status = searchParams.get("status") ?? "all";
-  const { data, isLoading } = usePluginView(dbPath, 0, 200, status);
+  const { data, isLoading } = usePluginView(root, path, 0, 200, status);
 
   const filteredRows = data?.rows.filter((raw) => {
     if (!search) return true;
@@ -198,7 +202,8 @@ export function AgentRunSidebar({
               <RunCard
                 key={r.session_id ?? r.row_offset}
                 row={r}
-                dbPath={dbPath}
+                root={root}
+                path={path}
                 selected={
                   selectedKey === r.session_id ||
                   selectedKey === String(r.row_offset)

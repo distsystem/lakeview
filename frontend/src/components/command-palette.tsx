@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import {
@@ -10,14 +10,14 @@ import {
   CommandGroup,
   CommandItem,
   CommandShortcut,
-  CommandSeparator,
 } from "@/components/ui/command";
-import { Folder, Database, ArrowRight, Loader2 } from "lucide-react";
+import { Folder, Database, Loader2 } from "lucide-react";
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
+  const { root = "" } = useParams();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -30,67 +30,47 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Use the typed text as the browse prefix; deepest existing prefix wins.
-  // Strip trailing slashes and trailing partial segment so "sample-data/k"
-  // still browses "sample-data". Preserve the `s3://` scheme when splitting.
-  const trimmed = query.trim().replace(/\/+$/, "");
-  const scheme = trimmed.startsWith("s3://") ? "s3://" : "";
-  const body = trimmed.slice(scheme.length);
-  const lastSlash = body.lastIndexOf("/");
-  const browsePrefix =
-    trimmed === "" ? ""
-    : lastSlash === -1 ? trimmed
-    : scheme + body.slice(0, lastSlash);
-  const tailFilter = lastSlash === -1 ? "" : body.slice(lastSlash + 1).toLowerCase();
+  // Palette is scoped to the current root. Typing "foo/bar/baz" browses the
+  // deepest existing prefix ("foo/bar") and filters by tail ("baz").
+  const trimmed = query.trim().replace(/^\/+|\/+$/g, "");
+  const lastSlash = trimmed.lastIndexOf("/");
+  const browsePath = lastSlash === -1 ? "" : trimmed.slice(0, lastSlash);
+  const tailFilter = lastSlash === -1
+    ? trimmed.toLowerCase()
+    : trimmed.slice(lastSlash + 1).toLowerCase();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["palette-datasets", browsePrefix],
+    queryKey: ["palette-datasets", root, browsePath],
     queryFn: async () => {
       const { data } = await api.GET("/api/datasets", {
-        params: { query: { prefix: browsePrefix } },
+        params: { query: { root, path: browsePath } },
       });
       return data!;
     },
-    enabled: open,
+    enabled: open && !!root,
   });
 
   const filtered = (data?.datasets ?? []).filter((d) =>
-    tailFilter ? d.name.toLowerCase().includes(tailFilter) : true
+    tailFilter ? d.name.toLowerCase().includes(tailFilter) : true,
   );
 
-  const go = (path: string, isLance: boolean) => {
+  const go = (relPath: string) => {
     setOpen(false);
     setQuery("");
-    if (isLance) navigate(`/${encodeURIComponent(path)}`);
-    else navigate(`/?prefix=${encodeURIComponent(path)}`);
+    navigate(`/${root}/${relPath}`);
   };
 
-  // Allow user to "force navigate" to whatever they typed, even if not in list
-  const showRaw = query.trim() && query.trim() !== browsePrefix;
+  if (!root) return null;
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
       <CommandInput
-        placeholder="Browse path... (e.g. sample-data, s3://bucket/prefix)"
+        placeholder={`Browse under ${root}…`}
         value={query}
         onValueChange={setQuery}
       />
       <CommandList>
-        {showRaw && (
-          <>
-            <CommandGroup heading="Navigate">
-              <CommandItem
-                value={`__raw_${query}`}
-                onSelect={() => go(query.trim(), false)}
-              >
-                <ArrowRight />
-                <span className="font-mono">Browse "{query.trim()}"</span>
-              </CommandItem>
-            </CommandGroup>
-            <CommandSeparator />
-          </>
-        )}
-        <CommandGroup heading={`Contents of ${browsePrefix}`}>
+        <CommandGroup heading={`Contents of ${root}/${browsePath}`}>
           {isLoading && (
             <CommandItem disabled value="__loading">
               <Loader2 className="animate-spin" />
@@ -98,7 +78,7 @@ export function CommandPalette() {
             </CommandItem>
           )}
           {!isLoading && filtered.length === 0 && (
-            <CommandEmpty>No entries under {browsePrefix}</CommandEmpty>
+            <CommandEmpty>No entries under {root}/{browsePath}</CommandEmpty>
           )}
           {filtered.map((ds) => {
             const isLance = ds.kind === "lance";
@@ -107,7 +87,7 @@ export function CommandPalette() {
               <CommandItem
                 key={ds.path}
                 value={ds.path}
-                onSelect={() => go(ds.path, isLance)}
+                onSelect={() => go(ds.path)}
               >
                 <Icon className={isLance ? "text-blue-500" : "text-muted-foreground"} />
                 <span className="font-mono">{ds.name}</span>

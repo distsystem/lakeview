@@ -2,22 +2,24 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 
 export function usePluginView(
-  dbPath: string,
+  root: string,
+  path: string,
   offset: number = 0,
   limit: number = 200,
   filter: string = "all",
 ) {
   return useQuery({
-    queryKey: ["plugin-view", dbPath, offset, limit, filter],
+    queryKey: ["plugin-view", root, path, offset, limit, filter],
     queryFn: async () => {
-      const { data } = await api.GET("/api/d/{db_path}/view", {
+      const { data } = await api.GET("/api/d/{root}/{path}/view", {
         params: {
-          path: { db_path: dbPath },
+          path: { root, path },
           query: { offset, limit, filter },
         },
       });
       return data!;
     },
+    enabled: !!root && !!path,
     refetchInterval: 10_000,
   });
 }

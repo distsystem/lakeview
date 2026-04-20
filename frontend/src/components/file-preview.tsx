@@ -41,8 +41,11 @@ const EXT_TO_LANG: Record<string, BundledLanguage> = {
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"]);
 const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 
-function fileUrl(path: string): string {
-  return `/api/file/${encodeURIComponent(path)}`;
+function fileUrl(root: string, path: string): string {
+  // Per-segment encoding keeps slashes as URL separators (FastAPI's path
+  // converter) while escaping everything else.
+  const segs = path.split("/").map(encodeURIComponent).join("/");
+  return `/api/file/${root}/${segs}`;
 }
 
 function extOf(path: string): string {
@@ -50,11 +53,11 @@ function extOf(path: string): string {
   return i === -1 ? "" : path.slice(i + 1).toLowerCase();
 }
 
-function ImagePreview({ path }: { path: string }) {
+function ImagePreview({ root, path }: { root: string; path: string }) {
   return (
     <div className="flex items-center justify-center bg-muted/30 rounded-md p-4">
       <img
-        src={fileUrl(path)}
+        src={fileUrl(root, path)}
         alt={path}
         className="max-w-full max-h-[70vh] rounded"
       />
@@ -62,11 +65,11 @@ function ImagePreview({ path }: { path: string }) {
   );
 }
 
-function MarkdownPreview({ path }: { path: string }) {
+function MarkdownPreview({ root, path }: { root: string; path: string }) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["file-text", path],
+    queryKey: ["file-text", root, path],
     queryFn: async () => {
-      const res = await fetch(fileUrl(path));
+      const res = await fetch(fileUrl(root, path));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.text();
     },
@@ -82,11 +85,19 @@ function MarkdownPreview({ path }: { path: string }) {
   );
 }
 
-function CodePreview({ path, lang }: { path: string; lang: BundledLanguage }) {
+function CodePreview({
+  root,
+  path,
+  lang,
+}: {
+  root: string;
+  path: string;
+  lang: BundledLanguage;
+}) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["file-text", path],
+    queryKey: ["file-text", root, path],
     queryFn: async () => {
-      const res = await fetch(fileUrl(path));
+      const res = await fetch(fileUrl(root, path));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.text();
     },
@@ -94,7 +105,6 @@ function CodePreview({ path, lang }: { path: string; lang: BundledLanguage }) {
   if (isLoading) return <PreviewSkeleton />;
   if (error || data == null) return <PreviewError error={error} />;
 
-  // Pretty-print JSON before highlighting
   let code = data;
   if (lang === "json") {
     try { code = JSON.stringify(JSON.parse(data), null, 2); } catch { /* keep raw */ }
@@ -102,7 +112,7 @@ function CodePreview({ path, lang }: { path: string; lang: BundledLanguage }) {
   return <CodeBlock code={code} language={lang} showLineNumbers />;
 }
 
-function DownloadFallback({ path }: { path: string }) {
+function DownloadFallback({ root, path }: { root: string; path: string }) {
   return (
     <Alert>
       <AlertTriangle className="size-4" />
@@ -110,7 +120,7 @@ function DownloadFallback({ path }: { path: string }) {
       <AlertDescription className="flex items-center gap-2">
         <span>The file format is not supported for inline preview.</span>
         <Button asChild variant="outline" size="sm">
-          <a href={fileUrl(path)} download>
+          <a href={fileUrl(root, path)} download>
             <Download className="size-3.5" /> Download
           </a>
         </Button>
@@ -141,17 +151,16 @@ function PreviewError({ error }: { error: unknown }) {
   );
 }
 
-export function FilePreview({ path }: { path: string }) {
+export function FilePreview({ root, path }: { root: string; path: string }) {
   const ext = extOf(path);
 
-  if (IMAGE_EXTS.has(ext)) return <ImagePreview path={path} />;
-  if (MARKDOWN_EXTS.has(ext)) return <MarkdownPreview path={path} />;
+  if (IMAGE_EXTS.has(ext)) return <ImagePreview root={root} path={path} />;
+  if (MARKDOWN_EXTS.has(ext)) return <MarkdownPreview root={root} path={path} />;
   const lang = EXT_TO_LANG[ext];
-  if (lang) return <CodePreview path={path} lang={lang} />;
+  if (lang) return <CodePreview root={root} path={path} lang={lang} />;
 
-  // Default: try to render as plain text if it looks textual; otherwise download
   if (ext === "" || ext === "txt" || ext === "log") {
-    return <CodePreview path={path} lang={"text" as BundledLanguage} />;
+    return <CodePreview root={root} path={path} lang={"text" as BundledLanguage} />;
   }
-  return <DownloadFallback path={path} />;
+  return <DownloadFallback root={root} path={path} />;
 }

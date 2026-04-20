@@ -27,18 +27,24 @@ function LoadingSkeleton() {
   );
 }
 
-export function DatasetView() {
-  const { "*": splat } = useParams();
-  const parts = (splat ?? "").split("/r/");
-  const dbPath = parts[0].replace(/\/$/, "");
-  const runKey = parts[1] ?? null;
+export function DatasetPage() {
+  const { root = "", "*": splat = "" } = useParams();
+  const [dbPath, runKey] = (() => {
+    const parts = splat.split("/r/");
+    return [parts[0].replace(/\/$/, ""), parts[1] ?? null] as const;
+  })();
 
-  const { data: info, isLoading, isError } = useDatasetInfo(dbPath);
+  const { data: info, isLoading, isError } = useDatasetInfo(root, dbPath);
+
+  // Empty path = browse root top-level. No info fetch possible.
+  if (!dbPath) {
+    return <DatasetList root={root} path="" />;
+  }
 
   if (isLoading) return <LoadingSkeleton />;
 
   if (isError || !info) {
-    return <DatasetList prefix={dbPath} />;
+    return <DatasetList root={root} path={dbPath} />;
   }
 
   if (info.plugin) {
@@ -46,9 +52,9 @@ export function DatasetView() {
     if (plugin) {
       return (
         <div className="flex h-[calc(100vh-48px)] overflow-hidden">
-          <plugin.Sidebar dbPath={dbPath} selectedKey={runKey} />
+          <plugin.Sidebar root={root} path={dbPath} selectedKey={runKey} />
           {runKey ? (
-            <plugin.Detail dbPath={dbPath} runKey={runKey} />
+            <plugin.Detail root={root} path={dbPath} runKey={runKey} />
           ) : (
             <EmptyMain />
           )}
@@ -57,5 +63,5 @@ export function DatasetView() {
     }
   }
 
-  return <GenericTableView dbPath={dbPath} schema={info.columns} />;
+  return <GenericTableView root={root} path={dbPath} schema={info.columns} />;
 }

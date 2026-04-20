@@ -3,8 +3,12 @@ import { AgentRunSidebar } from "./agent-run/sidebar";
 import { AgentRunDetail } from "./agent-run/detail";
 
 interface PluginComponents {
-  Sidebar: ComponentType<{ dbPath: string; selectedKey?: string | null }>;
-  Detail: ComponentType<{ dbPath: string; runKey: string }>;
+  Sidebar: ComponentType<{
+    root: string;
+    path: string;
+    selectedKey?: string | null;
+  }>;
+  Detail: ComponentType<{ root: string; path: string; runKey: string }>;
 }
 
 const plugins: Record<string, PluginComponents> = {
