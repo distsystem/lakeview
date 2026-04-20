@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import sys
 import uuid
 from typing import Callable
@@ -24,6 +25,14 @@ from typing import Callable
 import lance
 import pyarrow as pa
 from PIL import Image, ImageDraw
+
+
+def _default_target() -> str | None:
+    bucket = os.environ.get("S3_BUCKET")
+    prefix = os.environ.get("S3_PREFIX")
+    if bucket and prefix:
+        return f"s3://{bucket}/{prefix}"
+    return None
 
 
 # -- fake_runs fixture --------------------------------------------------------
@@ -153,8 +162,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--target",
-        required=True,
-        help="Base directory or URI (e.g. sample-data or s3://bucket/prefix)",
+        default=_default_target(),
+        help=(
+            "Base directory or URI (default: s3://$S3_BUCKET/$S3_PREFIX when "
+            "both env vars are set; otherwise required)"
+        ),
     )
     parser.add_argument(
         "--fixture",
@@ -169,6 +181,10 @@ def main() -> int:
         help="Row count for size-parameterized fixtures (default: per-fixture)",
     )
     args = parser.parse_args()
+    if not args.target:
+        parser.error(
+            "--target is required (or set both S3_BUCKET and S3_PREFIX in the env)"
+        )
 
     fixtures = list(FIXTURES) if args.fixture == "all" else [args.fixture]
     print(f"target: {args.target}")

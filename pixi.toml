@@ -7,9 +7,11 @@ preview = ["pixi-build"]
 
 [tasks]
 dev = "uvicorn lakeview.app:app --host 0.0.0.0 --port 8766 --reload & cd frontend && bun run dev"
-# Open the UI at the dev default prefix. Picks up LAKEVIEW_DEFAULT_PREFIX
-# from .env at the repo root (or the shell, if already exported).
-open = "bash -c '[ -f .env ] && set -a && . ./.env && set +a; xdg-open \"http://localhost:5173/?prefix=$LAKEVIEW_DEFAULT_PREFIX\"'"
+# Open the UI at the dev S3 prefix. Expects $S3_BUCKET and $S3_PREFIX in
+# the shell env (via direnv + .env, or `source .env` before `pixi run`).
+open = "xdg-open http://localhost:5173/?prefix=s3://$S3_BUCKET/$S3_PREFIX"
+# Seed S3 with fixtures used by benches and plugin smoke tests.
+seed = "python scripts/generate_test_data.py --target s3://$S3_BUCKET/$S3_PREFIX --fixture all"
 
 [dependencies]
 python = "=3.12"
