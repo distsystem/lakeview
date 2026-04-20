@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from lakeview import formats, models, plugins, storage
+from lakeview.config import settings
 
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
 # obstore/lance release the GIL during I/O, so threads parallelize effectively.
@@ -26,6 +27,11 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/config")
+def get_config() -> models.ConfigResponse:
+    return models.ConfigResponse(default_prefix=settings.default_prefix)
 
 
 def _open_or_404(db_path: str) -> formats.DatasetReader:

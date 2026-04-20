@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { useConfig } from "@/hooks/use-config";
 import { useDatasets } from "@/hooks/use-datasets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,8 @@ function formatSize(bytes: number): string {
 export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
   const [searchParams] = useSearchParams();
   const queryPrefix = searchParams.get("prefix");
-  const initial = routePrefix || queryPrefix || "sample-data";
+  const { data: config } = useConfig();
+  const initial = routePrefix || queryPrefix || config?.default_prefix || "";
   const [input, setInput] = useState(initial);
   const [prefix, setPrefix] = useState(initial);
   const [filter, setFilter] = useState("");
@@ -49,7 +51,7 @@ export function DatasetList({ prefix: routePrefix }: { prefix?: string }) {
   const navigate = useNavigate();
   const { data, isLoading } = useDatasets(prefix);
 
-  const effectivePrefix = routePrefix || queryPrefix;
+  const effectivePrefix = routePrefix || queryPrefix || config?.default_prefix;
   if (effectivePrefix && effectivePrefix !== prefix) {
     setPrefix(effectivePrefix);
     setInput(effectivePrefix);

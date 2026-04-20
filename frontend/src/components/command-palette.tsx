@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import { useConfig } from "@/hooks/use-config";
 import {
   CommandDialog,
   CommandInput,
@@ -18,6 +19,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
+  const { data: config } = useConfig();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -38,7 +40,7 @@ export function CommandPalette() {
   const body = trimmed.slice(scheme.length);
   const lastSlash = body.lastIndexOf("/");
   const browsePrefix =
-    trimmed === "" ? "sample-data"
+    trimmed === "" ? (config?.default_prefix || "")
     : lastSlash === -1 ? trimmed
     : scheme + body.slice(0, lastSlash);
   const tailFilter = lastSlash === -1 ? "" : body.slice(lastSlash + 1).toLowerCase();

@@ -13,9 +13,10 @@ python = "=3.12"
 lancedb = "*"
 uvicorn = "*"
 hatchling = "*"
+obstore = "*"
+fastapi = "*"
+pillow = "*"
+pydantic-settings = "*"
 
 [pypi-dependencies]
 lakeview = { path = ".", editable = true }
-fastapi = "*"
-httpx = "*"
-obstore = "*"
