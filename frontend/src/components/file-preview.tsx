@@ -9,6 +9,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import type { BundledLanguage } from "shiki";
+import { encodePath } from "@/lib/utils";
 
 const EXT_TO_LANG: Record<string, BundledLanguage> = {
   js: "javascript",
@@ -42,10 +43,7 @@ const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"])
 const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 
 function fileUrl(root: string, path: string): string {
-  // Per-segment encoding keeps slashes as URL separators (FastAPI's path
-  // converter) while escaping everything else.
-  const segs = path.split("/").map(encodeURIComponent).join("/");
-  return `/api/file/${root}/${segs}`;
+  return `/api/file/${root}/${encodePath(path)}`;
 }
 
 function extOf(path: string): string {

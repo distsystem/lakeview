@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { encodePath, formatBytes } from "@/lib/utils";
 
 export type BlobValue = { size?: number; position?: number } | null | undefined;
 
@@ -10,14 +11,7 @@ function blobUrl(
   offset: number,
   column: string,
 ): string {
-  const segs = path.split("/").map(encodeURIComponent).join("/");
-  return `/api/d/${root}/${segs}/blob/${offset}/${encodeURIComponent(column)}`;
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `/api/d/${root}/${encodePath(path)}/blob/${offset}/${encodeURIComponent(column)}`;
 }
 
 function NonImageFallback({

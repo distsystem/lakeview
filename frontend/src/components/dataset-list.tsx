@@ -29,14 +29,7 @@ import {
 import { PathBreadcrumb } from "@/components/path-breadcrumb";
 import { FilePreview } from "@/components/file-preview";
 import { Folder, FolderOpen, Database, File, Search } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
+import { cn, formatBytes } from "@/lib/utils";
 
 function joinPath(root: string, path: string): string {
   return path ? `/${root}/${path}` : `/${root}`;
@@ -144,7 +137,7 @@ export function DatasetList({
                 };
 
                 const sizeText = isFile && ds.size != null
-                  ? formatSize(ds.size)
+                  ? formatBytes(ds.size)
                   : ds.row_count != null
                   ? `${ds.row_count.toLocaleString()} rows`
                   : "—";

@@ -51,7 +51,6 @@ import {
   Settings,
   RotateCcw,
   MessageSquare,
-  CornerDownRight,
   Wrench,
   Brain,
 } from "lucide-react";

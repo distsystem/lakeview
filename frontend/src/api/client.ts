@@ -10,3 +10,6 @@ export type ColumnInfo = components["schemas"]["ColumnInfo"];
 export type GenericRowListResponse = components["schemas"]["GenericRowListResponse"];
 export type PluginViewResponse = components["schemas"]["PluginViewResponse"];
 export type PluginDetailResponse = components["schemas"]["PluginDetailResponse"];
+export type AgentRunStats = components["schemas"]["AgentRunStats"];
+export type AgentRunSidebar = components["schemas"]["AgentRunSidebar"];
+export type AgentRunDetail = components["schemas"]["AgentRunDetail"];

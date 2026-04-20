@@ -3,7 +3,6 @@ import { Link, useSearchParams } from "react-router";
 import { usePluginView } from "@/hooks/use-plugin-view";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
