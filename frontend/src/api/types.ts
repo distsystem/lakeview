@@ -4,23 +4,6 @@
  */
 
 export interface paths {
-    "/api/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Config */
-        get: operations["get_config_api_config_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/file/{path}": {
         parameters: {
             query?: never;
@@ -214,11 +197,6 @@ export interface components {
             /** Nullable */
             nullable: boolean;
         };
-        /** ConfigResponse */
-        ConfigResponse: {
-            /** Default Prefix */
-            default_prefix: string;
-        };
         /** DatasetEntry */
         DatasetEntry: {
             /** Name */
@@ -318,26 +296,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_config_api_config_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigResponse"];
-                };
-            };
-        };
-    };
     get_file_api_file__path__get: {
         parameters: {
             query?: never;

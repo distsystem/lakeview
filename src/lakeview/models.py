@@ -5,13 +5,6 @@ from typing import Any
 from pydantic import BaseModel
 
 
-# -- App config --
-
-
-class ConfigResponse(BaseModel):
-    default_prefix: str
-
-
 # -- Dataset browsing --
 
 
