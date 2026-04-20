@@ -13,12 +13,10 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from lakeview import formats, models, storage
-from lakeview.plugins import registry
+from lakeview import formats, models, plugins, storage
 
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
-# Bounded pool for per-directory format detection. obstore/lance release
-# the GIL during I/O, so threads parallelize effectively.
+# obstore/lance release the GIL during I/O, so threads parallelize effectively.
 _DATASET_PROBE_WORKERS = 32
 
 app = FastAPI(title="lakeview", version="0.2.0")
@@ -30,7 +28,7 @@ app.add_middleware(
 )
 
 
-def _open_or_404(db_path: str) -> formats.base.DatasetReader:
+def _open_or_404(db_path: str) -> formats.DatasetReader:
     reader = formats.open_dataset(db_path.rstrip("/"), "lance")
     if reader is None:
         raise HTTPException(404, f"dataset not found: {db_path}")
@@ -59,39 +57,23 @@ def get_file(path: str) -> Response:
 def get_datasets(prefix: str = "") -> models.DatasetListResponse:
     resolved, entries = storage.list_entries(prefix)
     dir_entries = [e for e in entries if e.kind == "directory"]
-    probed: dict[str, tuple[str, int | None]] = {}
     if dir_entries:
         parent_store = storage.open_store(resolved)
 
-        def probe(entry):
+        def upgrade(entry: models.DatasetEntry) -> None:
             p = storage.Probe(parent_store, entry.name)
             cls = formats.detect(p)
             if cls is None:
-                return "directory", None
+                return
             reader = cls.open(entry.path)
             if reader is None:
-                return "directory", None
-            return cls.KIND, reader.count_rows()
+                return
+            entry.kind = cls.KIND
+            entry.row_count = reader.count_rows()
 
         with ThreadPoolExecutor(max_workers=_DATASET_PROBE_WORKERS) as pool:
-            probed = dict(
-                zip(
-                    (e.path for e in dir_entries),
-                    pool.map(probe, dir_entries),
-                    strict=True,
-                )
-            )
-    datasets = [
-        models.DatasetEntry(
-            name=e.name,
-            path=e.path,
-            kind=probed.get(e.path, (e.kind, e.row_count))[0],
-            row_count=probed.get(e.path, (e.kind, e.row_count))[1],
-            size=e.size,
-        )
-        for e in entries
-    ]
-    return models.DatasetListResponse(prefix=resolved, datasets=datasets)
+            list(pool.map(upgrade, dir_entries))
+    return models.DatasetListResponse(prefix=resolved, datasets=entries)
 
 
 # -- Dataset info (with plugin detection) --
@@ -100,7 +82,7 @@ def get_datasets(prefix: str = "") -> models.DatasetListResponse:
 @app.get("/api/d/{db_path:path}/info")
 def get_info(db_path: str) -> models.DatasetInfoResponse:
     reader = _open_or_404(db_path)
-    plugin = registry.detect_plugin(reader.schema)
+    plugin = plugins.detect_plugin(reader.schema)
     columns = [
         models.ColumnInfo(name=f.name, type=str(f.type), nullable=f.nullable)
         for f in reader.schema
@@ -163,7 +145,7 @@ def get_view(
     filter: str = "all",
 ) -> models.PluginViewResponse:
     reader = _open_or_404(db_path)
-    plugin = registry.detect_plugin(reader.schema)
+    plugin = plugins.detect_plugin(reader.schema)
     if not plugin:
         raise HTTPException(404, "no plugin detected for this schema")
 
@@ -194,11 +176,10 @@ def get_view(
 @app.get("/api/d/{db_path:path}/view/{key}")
 def get_view_detail(db_path: str, key: str) -> models.PluginDetailResponse:
     reader = _open_or_404(db_path)
-    plugin = registry.detect_plugin(reader.schema)
+    plugin = plugins.detect_plugin(reader.schema)
     if not plugin:
         raise HTTPException(404, "no plugin detected for this schema")
 
-    # Resolve key (plugin-specific: numeric offset or session_id)
     offset = getattr(
         plugin, "resolve_key", lambda r, k: int(k) if k.isdigit() else None
     )(reader, key)

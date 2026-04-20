@@ -12,7 +12,7 @@ from pathlib import Path
 import obstore as obs
 from obstore.store import LocalStore, from_url
 
-from lakeview.storage.base import EntryInfo
+from lakeview.models import DatasetEntry
 
 
 def _has_scheme(uri: str) -> bool:
@@ -20,22 +20,15 @@ def _has_scheme(uri: str) -> bool:
 
 
 def _open_dir(uri: str):
-    """Return an obstore rooted at `uri` (which must denote a directory)."""
     if _has_scheme(uri):
         return from_url(uri)
     return LocalStore(uri)
 
 
-def _resolve_local_dir(path: str) -> str | None:
+def _resolve_local(path: str, kind: str) -> str | None:
+    check = Path.is_dir if kind == "dir" else Path.is_file
     for candidate in (path, f"/{path}"):
-        if Path(candidate).is_dir():
-            return candidate
-    return None
-
-
-def _resolve_local_file(path: str) -> str | None:
-    for candidate in (path, f"/{path}"):
-        if Path(candidate).is_file():
+        if check(Path(candidate)):
             return candidate
     return None
 
@@ -47,7 +40,7 @@ def resolve_dir(uri: str) -> str | None:
         return None
     if _has_scheme(uri):
         return uri
-    return _resolve_local_dir(uri)
+    return _resolve_local(uri, "dir")
 
 
 def open_store(uri: str):
@@ -83,7 +76,7 @@ class Probe:
         return hit
 
 
-def list_entries(uri: str) -> tuple[str, list[EntryInfo]]:
+def list_entries(uri: str) -> tuple[str, list[DatasetEntry]]:
     """List 1 level under `uri`. Returns (resolved_uri, entries)."""
     if not uri:
         return "", []
@@ -97,13 +90,13 @@ def list_entries(uri: str) -> tuple[str, list[EntryInfo]]:
     except Exception:
         return resolved, []
 
-    entries: list[EntryInfo] = []
+    entries: list[DatasetEntry] = []
     for prefix in result.get("common_prefixes", []):
         name = prefix.rstrip("/").rsplit("/", 1)[-1]
         if not name or name.startswith((".", "_")):
             continue
         entries.append(
-            EntryInfo(name=name, path=f"{resolved}/{name}", kind="directory")
+            DatasetEntry(name=name, path=f"{resolved}/{name}", kind="directory")
         )
 
     for meta in result.get("objects", []):
@@ -112,7 +105,7 @@ def list_entries(uri: str) -> tuple[str, list[EntryInfo]]:
         if not name or name.startswith("."):
             continue
         entries.append(
-            EntryInfo(
+            DatasetEntry(
                 name=name,
                 path=f"{resolved}/{name}",
                 kind="file",
@@ -120,7 +113,6 @@ def list_entries(uri: str) -> tuple[str, list[EntryInfo]]:
             )
         )
 
-    # Directories first, then files; alphabetical within each
     entries.sort(key=lambda e: (e.kind == "file", e.name))
     return resolved, entries
 
@@ -130,7 +122,7 @@ def read_file(uri: str, max_bytes: int) -> tuple[bytes, int] | None:
 
     Raises ValueError if the file exceeds `max_bytes`.
     """
-    target = uri if _has_scheme(uri) else _resolve_local_file(uri)
+    target = uri if _has_scheme(uri) else _resolve_local(uri, "file")
     if target is None:
         return None
     parent, _, name = target.rpartition("/")

@@ -5,7 +5,7 @@ import re
 
 import pyarrow as pa
 
-from lakeview.formats.base import DatasetReader
+from lakeview.formats import DatasetReader
 
 _SESSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
