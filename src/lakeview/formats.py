@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import mimetypes
-import os
 import typing
 
 import lance
@@ -99,17 +98,6 @@ class DatasetReader(typing.Protocol):
 # -- Lance --
 
 
-def _resolve_lance_uri(db_path: str) -> str:
-    if "://" in db_path:
-        return db_path
-    if os.path.exists(db_path):
-        return os.path.abspath(db_path)
-    absolute = f"/{db_path}"
-    if os.path.exists(absolute):
-        return absolute
-    raise FileNotFoundError(db_path)
-
-
 _lance_cache: dict[str, lance.LanceDataset] = {}
 
 
@@ -125,17 +113,17 @@ class LanceReader:
         return all(probe.has_any(m) for m in cls.MARKERS)
 
     @classmethod
-    def open(cls, db_path: str) -> "LanceReader | None":
-        if db_path in _lance_cache:
-            ds = _lance_cache[db_path]
+    def open(cls, uri: str) -> "LanceReader | None":
+        if uri in _lance_cache:
+            ds = _lance_cache[uri]
             ds.checkout_version(ds.latest_version)
             return cls(ds)
         try:
-            ds = lance.dataset(_resolve_lance_uri(db_path))
-            _lance_cache[db_path] = ds
-            return cls(ds)
+            ds = lance.dataset(uri)
         except Exception:
             return None
+        _lance_cache[uri] = ds
+        return cls(ds)
 
     @property
     def schema(self):
@@ -220,20 +208,14 @@ class LanceReader:
 
 
 # -- Registry --
-
-# Ordered; first matching marker set wins.
-PROBERS: list[type] = [LanceReader]
-
-_BY_KIND: dict[str, type] = {cls.KIND: cls for cls in PROBERS}
+#
+# Only Lance today. When a second backend lands, turn `detect` into a
+# dispatch loop and thread the chosen class through `open_dataset`.
 
 
-def detect(probe) -> type | None:
-    for cls in PROBERS:
-        if cls.detect(probe):
-            return cls
-    return None
+def detect(probe) -> type[LanceReader] | None:
+    return LanceReader if LanceReader.detect(probe) else None
 
 
-def open_dataset(path: str, kind: str) -> DatasetReader | None:
-    cls = _BY_KIND.get(kind)
-    return cls.open(path) if cls else None
+def open_dataset(uri: str) -> DatasetReader | None:
+    return LanceReader.open(uri)

@@ -17,7 +17,7 @@ from lakeview import formats, models, plugins, storage
 
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
 # obstore/lance release the GIL during I/O, so threads parallelize effectively.
-_DATASET_PROBE_WORKERS = 32
+_PROBE_WORKERS = 32
 
 app = FastAPI(title="lakeview", version="0.3.0")
 app.add_middleware(
@@ -41,7 +41,7 @@ def _open_or_404(root: str, path: str) -> formats.DatasetReader:
     uri = storage.resolve(root, path.rstrip("/"))
     if uri is None:
         raise HTTPException(404, f"unknown root: {root}")
-    reader = formats.open_dataset(uri, "lance")
+    reader = formats.open_dataset(uri)
     if reader is None:
         raise HTTPException(404, f"dataset not found: {root}/{path}")
     return reader
@@ -49,7 +49,6 @@ def _open_or_404(root: str, path: str) -> formats.DatasetReader:
 
 @app.get("/api/file/{root}/{path:path}")
 def get_file(root: str, path: str) -> Response:
-    """Serve raw file bytes from any root, for preview in the frontend."""
     mime, _ = mimetypes.guess_type(path)
     media_type = mime or "application/octet-stream"
     try:
@@ -84,7 +83,7 @@ def get_datasets(root: str, path: str = "") -> models.DatasetListResponse:
             entry.kind = cls.KIND
             entry.row_count = reader.count_rows()
 
-        with ThreadPoolExecutor(max_workers=_DATASET_PROBE_WORKERS) as pool:
+        with ThreadPoolExecutor(max_workers=_PROBE_WORKERS) as pool:
             list(pool.map(upgrade, dir_entries))
     return models.DatasetListResponse(root=root, path=path, datasets=entries)
 
@@ -156,9 +155,7 @@ def get_row(root: str, path: str, offset: int) -> dict:
 def get_blob(root: str, path: str, offset: int, column: str) -> Response:
     """Stream one cell's raw bytes with a detected Content-Type.
 
-    Covers v1 / v2 Lance blob columns and plain binary columns. Content-Type
-    is taken from the blob's source URI suffix when available (v2 URI-refs),
-    and falls back to magic-byte sniffing of the first bytes. Non-binary
+    Covers v1 / v2 Lance blob columns and plain binary columns. Non-binary
     columns 404.
     """
     reader = _open_or_404(root, path)
