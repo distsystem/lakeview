@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { AgentRunStatsBar } from "@/components/plugins/agent-run/stats-bar";
 import { cn } from "@/lib/utils";
+import type { AgentRunSidebar as Row } from "@/api/client";
 import {
   CheckCircle2,
   XCircle,
@@ -22,16 +23,7 @@ import {
   Search,
 } from "lucide-react";
 
-interface RowData {
-  row_offset: number;
-  session_id?: string | null;
-  correct?: boolean | null;
-  error?: string | null;
-  output?: Record<string, unknown> | null;
-  metadata?: Record<string, unknown> | null;
-}
-
-function statusConfig(row: RowData) {
+function statusConfig(row: Row) {
   if (row.error)
     return {
       icon: <AlertTriangle className="size-3.5" />,
@@ -73,15 +65,17 @@ function RunCard({
   path,
   selected,
 }: {
-  row: RowData;
+  row: Row;
   root: string;
   path: string;
   selected: boolean;
 }) {
   const label = uuid7Time(row.session_id) || `#${row.row_offset}`;
-  const slug = row.metadata?.slug as string | undefined;
-  const expected = row.metadata?.answer;
-  const modelAns = row.output?.answer;
+  const metadata = row.metadata as Record<string, unknown> | null | undefined;
+  const output = row.output as Record<string, unknown> | null | undefined;
+  const slug = metadata?.slug as string | undefined;
+  const expected = metadata?.answer;
+  const modelAns = output?.answer;
   const status = statusConfig(row);
 
   return (
@@ -152,10 +146,10 @@ export function AgentRunSidebar({
   const status = searchParams.get("status") ?? "all";
   const { data, isLoading } = usePluginView(root, path, 0, 200, status);
 
-  const filteredRows = data?.rows.filter((raw) => {
+  const filteredRows = data?.rows.filter((row) => {
     if (!search) return true;
-    const row = raw as unknown as RowData;
-    const slug = (row.metadata?.slug as string) ?? "";
+    const metadata = row.metadata as Record<string, unknown> | null | undefined;
+    const slug = (metadata?.slug as string) ?? "";
     const sid = row.session_id ?? "";
     const q = search.toLowerCase();
     return slug.toLowerCase().includes(q) || sid.includes(q);
@@ -195,21 +189,18 @@ export function AgentRunSidebar({
             Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="h-14 w-full rounded-xl" />
             ))}
-          {filteredRows?.map((raw) => {
-            const r = raw as unknown as RowData;
-            return (
-              <RunCard
-                key={r.session_id ?? r.row_offset}
-                row={r}
-                root={root}
-                path={path}
-                selected={
-                  selectedKey === r.session_id ||
-                  selectedKey === String(r.row_offset)
-                }
-              />
-            );
-          })}
+          {filteredRows?.map((row) => (
+            <RunCard
+              key={row.session_id ?? row.row_offset}
+              row={row}
+              root={root}
+              path={path}
+              selected={
+                selectedKey === row.session_id ||
+                selectedKey === String(row.row_offset)
+              }
+            />
+          ))}
           {filteredRows && filteredRows.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-8">
               No runs found

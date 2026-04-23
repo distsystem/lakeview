@@ -35,6 +35,17 @@ function joinPath(root: string, path: string): string {
   return path ? `/${root}/${path}` : `/${root}`;
 }
 
+const KIND_STYLE = {
+  lance: { icon: Database, color: "text-blue-500", browsable: true },
+  namespace: { icon: Library, color: "text-purple-500", browsable: true },
+  file: { icon: File, color: "text-muted-foreground", browsable: false },
+  directory: { icon: Folder, color: "text-amber-500", browsable: true },
+} as const;
+
+function kindStyle(kind: string) {
+  return KIND_STYLE[kind as keyof typeof KIND_STYLE] ?? KIND_STYLE.directory;
+}
+
 export function DatasetList({
   root,
   path,
@@ -118,31 +129,14 @@ export function DatasetList({
               ))}
             {!isLoading &&
               filtered.map((ds) => {
+                const style = kindStyle(ds.kind);
                 const isLance = ds.kind === "lance";
                 const isFile = ds.kind === "file";
-                const isNamespace = ds.kind === "namespace";
-                const isDir = !isLance && !isFile && !isNamespace;
-                const isBrowsable = isLance || isDir || isNamespace;
-
-                const Icon = isLance
-                  ? Database
-                  : isFile
-                  ? File
-                  : isNamespace
-                  ? Library
-                  : Folder;
-                const iconColor = isLance
-                  ? "text-blue-500"
-                  : isFile
-                  ? "text-muted-foreground"
-                  : isNamespace
-                  ? "text-purple-500"
-                  : "text-amber-500";
-
+                const Icon = style.icon;
                 const entryHref = joinPath(root, ds.path);
 
                 const onPrimary = () => {
-                  if (isBrowsable) navigate(entryHref);
+                  if (style.browsable) navigate(entryHref);
                   else if (isFile) setPreviewPath(ds.path);
                 };
 
@@ -160,8 +154,8 @@ export function DatasetList({
                   >
                     <TableCell>
                       <span className="flex items-center gap-2 font-mono text-sm">
-                        <Icon className={cn("size-4 shrink-0", iconColor)} />
-                        {isBrowsable ? (
+                        <Icon className={cn("size-4 shrink-0", style.color)} />
+                        {style.browsable ? (
                           <Link
                             to={entryHref}
                             className="no-underline hover:underline"

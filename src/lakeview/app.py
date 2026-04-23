@@ -37,11 +37,15 @@ def get_roots() -> models.RootsResponse:
     )
 
 
-def _open_or_404(root: str, path: str) -> formats.DatasetReader:
+def _backend_or_404(root: str):
     backend = roots.get_backend(root)
     if backend is None:
         raise HTTPException(404, f"unknown root: {root}")
-    reader = backend.open_dataset(path.rstrip("/"))
+    return backend
+
+
+def _open_or_404(root: str, path: str) -> formats.DatasetReader:
+    reader = _backend_or_404(root).open_dataset(path.rstrip("/"))
     if reader is None:
         raise HTTPException(404, f"dataset not found: {root}/{path}")
     return reader
@@ -50,18 +54,14 @@ def _open_or_404(root: str, path: str) -> formats.DatasetReader:
 @app.get("/api/file/{root}/{path:path}")
 def get_file(root: str, path: str) -> Response:
     mime, _ = mimetypes.guess_type(path)
-    media_type = mime or "application/octet-stream"
-    backend = roots.get_backend(root)
-    if backend is None:
-        raise HTTPException(404, f"unknown root: {root}")
     try:
-        result = backend.read_file(path, MAX_PREVIEW_BYTES)
+        result = _backend_or_404(root).read_file(path, MAX_PREVIEW_BYTES)
     except ValueError as e:
         raise HTTPException(413, str(e)) from e
     if result is None:
         raise HTTPException(404, f"file not found: {root}/{path}")
     data, _ = result
-    return Response(content=data, media_type=media_type)
+    return Response(content=data, media_type=mime or "application/octet-stream")
 
 
 # -- Dataset browsing --
@@ -69,8 +69,7 @@ def get_file(root: str, path: str) -> Response:
 
 @app.get("/api/datasets")
 def get_datasets(root: str, path: str = "") -> models.DatasetListResponse:
-    backend = roots.get_backend(root)
-    entries = backend.list_entries(path) if backend else []
+    entries = _backend_or_404(root).list_entries(path)
     return models.DatasetListResponse(root=root, path=path, datasets=entries)
 
 

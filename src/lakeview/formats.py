@@ -50,7 +50,7 @@ def detect_mime(head: bytes, uri: str | None = None) -> str:
     return _MIME.from_buffer(head) or "application/octet-stream"
 
 
-def _normalize_binary_rows(rows: list[dict], binary_cols: list[str]) -> list[dict]:
+def _normalize_binary_rows(rows: list[dict], binary_cols: frozenset[str]) -> list[dict]:
     """Replace raw `bytes` with `{size}` so FastAPI can encode the rows.
 
     Lance blob-encoded columns (v1 or v2) already materialize as descriptor
@@ -59,9 +59,8 @@ def _normalize_binary_rows(rows: list[dict], binary_cols: list[str]) -> list[dic
     if not binary_cols:
         return rows
     for row in rows:
-        for col in binary_cols:
-            v = row.get(col)
-            if isinstance(v, (bytes, bytearray, memoryview)):
+        for col, v in row.items():
+            if col in binary_cols and isinstance(v, (bytes, bytearray, memoryview)):
                 row[col] = {"size": len(v)}
     return rows
 
@@ -107,6 +106,14 @@ class LanceReader:
 
     def __init__(self, ds: lance.LanceDataset) -> None:
         self._ds = ds
+        # Plain binary (bytes) columns need bytes → {size} normalization on
+        # scan. Lance blob-encoded columns already materialize as descriptor
+        # dicts, so they're excluded.
+        self._plain_binary_names = frozenset(
+            f.name
+            for f in ds.schema
+            if is_plain_binary(f) and not is_blob_v1_encoded(f)
+        )
 
     @classmethod
     def detect(cls, probe) -> bool:
@@ -143,17 +150,6 @@ class LanceReader:
             offset=offset, limit=limit, columns=columns, filter=filter
         )
 
-    def _plain_binary_cols(self, columns: list[str] | None) -> list[str]:
-        """Plain binary columns — need bytes → {size} normalization."""
-        names = set(columns) if columns else None
-        return [
-            f.name
-            for f in self._ds.schema
-            if is_plain_binary(f)
-            and not is_blob_v1_encoded(f)
-            and (names is None or f.name in names)
-        ]
-
     def scan(
         self,
         offset: int = 0,
@@ -164,14 +160,13 @@ class LanceReader:
         rows = self.to_arrow(
             offset=offset, limit=limit, columns=columns, filter=filter
         ).to_pylist()
-        return _normalize_binary_rows(rows, self._plain_binary_cols(columns))
+        return _normalize_binary_rows(rows, self._plain_binary_names)
 
     def get_row(self, offset: int) -> dict | None:
         tbl = self._ds.to_table(offset=offset, limit=1)
         if not tbl.num_rows:
             return None
-        rows = _normalize_binary_rows(tbl.to_pylist(), self._plain_binary_cols(None))
-        return rows[0]
+        return _normalize_binary_rows(tbl.to_pylist(), self._plain_binary_names)[0]
 
     def _blob_uri(self, offset: int, column: str) -> str | None:
         """Extract the blob_uri field from a v2 blob descriptor, if any."""
@@ -207,10 +202,7 @@ class LanceReader:
         return (bytes(value), None) if value is not None else None
 
 
-# -- Registry --
-#
-# Only Lance today. When a second backend lands, turn `detect` into a
-# dispatch loop and thread the chosen class through `open_dataset`.
+# -- Registry (Lance-only) --
 
 
 def detect(probe) -> type[LanceReader] | None:
