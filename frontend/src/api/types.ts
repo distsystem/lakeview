@@ -28,10 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get File
-         * @description Serve raw file bytes from any root, for preview in the frontend.
-         */
+        /** Get File */
         get: operations["get_file_api_file__root___path__get"];
         put?: never;
         post?: never;
@@ -137,9 +134,7 @@ export interface paths {
          * Get Blob
          * @description Stream one cell's raw bytes with a detected Content-Type.
          *
-         *     Covers v1 / v2 Lance blob columns and plain binary columns. Content-Type
-         *     is taken from the blob's source URI suffix when available (v2 URI-refs),
-         *     and falls back to magic-byte sniffing of the first bytes. Non-binary
+         *     Covers v1 / v2 Lance blob columns and plain binary columns. Non-binary
          *     columns 404.
          */
         get: operations["get_blob_api_d__root___path__blob__offset___column__get"];
@@ -324,6 +319,16 @@ export interface components {
             name: string;
             /** Uri */
             uri: string;
+            /**
+             * Kind
+             * @default storage
+             */
+            kind: string;
+            /**
+             * Driver
+             * @default
+             */
+            driver: string;
         };
         /** RootsResponse */
         RootsResponse: {

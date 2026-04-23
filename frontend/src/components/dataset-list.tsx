@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { PathBreadcrumb } from "@/components/path-breadcrumb";
 import { FilePreview } from "@/components/file-preview";
-import { Folder, FolderOpen, Database, File, Search } from "lucide-react";
+import { Folder, FolderOpen, Database, File, Library, Search } from "lucide-react";
 import { cn, formatBytes } from "@/lib/utils";
 
 function joinPath(root: string, path: string): string {
@@ -120,19 +120,29 @@ export function DatasetList({
               filtered.map((ds) => {
                 const isLance = ds.kind === "lance";
                 const isFile = ds.kind === "file";
-                const isDir = !isLance && !isFile;
+                const isNamespace = ds.kind === "namespace";
+                const isDir = !isLance && !isFile && !isNamespace;
+                const isBrowsable = isLance || isDir || isNamespace;
 
-                const Icon = isLance ? Database : isFile ? File : Folder;
+                const Icon = isLance
+                  ? Database
+                  : isFile
+                  ? File
+                  : isNamespace
+                  ? Library
+                  : Folder;
                 const iconColor = isLance
                   ? "text-blue-500"
                   : isFile
                   ? "text-muted-foreground"
+                  : isNamespace
+                  ? "text-purple-500"
                   : "text-amber-500";
 
                 const entryHref = joinPath(root, ds.path);
 
                 const onPrimary = () => {
-                  if (isLance || isDir) navigate(entryHref);
+                  if (isBrowsable) navigate(entryHref);
                   else if (isFile) setPreviewPath(ds.path);
                 };
 
@@ -151,7 +161,7 @@ export function DatasetList({
                     <TableCell>
                       <span className="flex items-center gap-2 font-mono text-sm">
                         <Icon className={cn("size-4 shrink-0", iconColor)} />
-                        {isLance || isDir ? (
+                        {isBrowsable ? (
                           <Link
                             to={entryHref}
                             className="no-underline hover:underline"
