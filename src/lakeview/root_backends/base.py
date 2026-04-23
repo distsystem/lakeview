@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from lakeview.formats import DatasetReader
+from lakeview.core import DatasetReader
 from lakeview.models import DatasetEntry
 
 

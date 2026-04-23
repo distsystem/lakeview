@@ -1,27 +1,20 @@
-"""Agent run plugin — rich views for datasets with messages + session_id + correct."""
+"""Agent-run plugin — rich views for datasets with messages + session_id + correct."""
 
 from __future__ import annotations
 
 import json
 import re
-from typing import Any
 
 import pyarrow as pa
 import pyarrow.compute as pc
-from lancedb.pydantic import LanceModel
 
-from lakeview.formats import DatasetReader
-from lakeview.models import AgentRunDetail, AgentRunSidebar, AgentRunStats
+from lakeview.core import DatasetReader, eq
 from lakeview.plugins import SchemaPlugin
-
-
-class AgentRunSchema(LanceModel):
-    """Columns this plugin needs; matches by name (loose)."""
-
-    session_id: str
-    messages: list[Any]
-    correct: bool | None
-
+from lakeview.plugins.agent_run.models import (
+    AgentRunDetail,
+    AgentRunSidebar,
+    AgentRunStats,
+)
 
 _SESSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -75,7 +68,7 @@ def _decode_messages(messages: list[dict]) -> list[dict]:
 
 class AgentRunPlugin(SchemaPlugin):
     name = "agent_run"
-    SCHEMA = AgentRunSchema
+    REQUIRED_COLUMNS = frozenset({"session_id", "messages", "correct"})
 
     def available_filters(self) -> list[str]:
         return list(_FILTER_KEYS)
@@ -123,8 +116,7 @@ class AgentRunPlugin(SchemaPlugin):
         if key.isdigit():
             row = reader.get_row(int(key))
         elif _SESSION_ID_RE.match(key):
-            # Lance SQL: single-quoted string literal; key is UUID-safe already.
-            tbl = reader.to_arrow(filter=f"session_id = '{key}'", limit=1)
+            tbl = reader.to_arrow(filter=eq("session_id", key), limit=1)
             row = tbl.to_pylist()[0] if tbl.num_rows else None
         else:
             return None

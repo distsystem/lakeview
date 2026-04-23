@@ -1,8 +1,12 @@
 """Pydantic response models — the API contract."""
 
-from typing import Any
-
 from pydantic import BaseModel
+
+from lakeview.plugins.agent_run.models import (
+    AgentRunDetail,
+    AgentRunSidebar,
+    AgentRunStats,
+)
 
 
 # -- Roots --
@@ -64,33 +68,12 @@ class GenericRowListResponse(BaseModel):
     rows: list[dict]
 
 
-# -- Agent-run plugin outputs --
-
-
-class AgentRunStats(BaseModel):
-    total: int
-    ok: int
-    wrong: int
-    error: int
-    pending: int
-    accuracy: float | None = None
-
-
-class AgentRunSidebar(BaseModel):
-    row_offset: int
-    session_id: str | None = None
-    correct: bool | None = None
-    error: str | None = None
-    output: Any | None = None
-    metadata: Any | None = None
-
-
-class AgentRunDetail(BaseModel):
-    row: dict
-    messages: list[dict]
-
-
 # -- Plugin-enriched views --
+#
+# Today's envelope is hard-typed against the agent-run plugin because it's the
+# only one. When a second plugin lands, either carve out per-plugin envelope
+# types or switch to a generic ``rows: list[Any]`` (at the cost of schema
+# specificity in the generated frontend types).
 
 
 class PluginViewResponse(BaseModel):

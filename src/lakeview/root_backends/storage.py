@@ -5,8 +5,8 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from lakeview import formats
-from lakeview.formats import DatasetReader
+from lakeview import core
+from lakeview.core import DatasetReader
 from lakeview.models import DatasetEntry
 from lakeview.root_backends import fs
 
@@ -30,7 +30,7 @@ class StorageRootBackend:
 
         def upgrade(entry: DatasetEntry) -> None:
             probe = fs.Probe(parent_store, entry.name)
-            cls = formats.detect(probe)
+            cls = core.detect(probe)
             if cls is None:
                 return
             reader = cls.open(fs.join(self.uri, entry.path))
@@ -44,7 +44,7 @@ class StorageRootBackend:
         return entries
 
     def open_dataset(self, path: str) -> DatasetReader | None:
-        return formats.open_dataset(fs.join(self.uri, path.rstrip("/")))
+        return core.open_dataset(fs.join(self.uri, path.rstrip("/")))
 
     def read_file(self, path: str, max_bytes: int) -> tuple[bytes, int] | None:
         return fs.read_file_at(self.uri, path, max_bytes)

@@ -12,7 +12,9 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from lakeview import formats, models, plugins, roots
+from lakeview import core, models, plugins, readers, roots  # noqa: F401
+
+_ = readers  # importing registers LanceReader via side effect
 
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
 
@@ -44,7 +46,7 @@ def _backend_or_404(root: str):
     return backend
 
 
-def _open_or_404(root: str, path: str) -> formats.DatasetReader:
+def _open_or_404(root: str, path: str) -> core.DatasetReader:
     reader = _backend_or_404(root).open_dataset(path.rstrip("/"))
     if reader is None:
         raise HTTPException(404, f"dataset not found: {root}/{path}")
@@ -76,15 +78,15 @@ def get_datasets(root: str, path: str = "") -> models.DatasetListResponse:
 # -- Dataset info (with plugin detection) --
 
 
-def _column_infos(schema) -> list[models.ColumnInfo]:
+def _column_infos(reader: core.DatasetReader) -> list[models.ColumnInfo]:
     return [
         models.ColumnInfo(
             name=f.name,
             type=str(f.type),
             nullable=f.nullable,
-            is_blob=formats.is_blob_column(f),
+            is_blob=reader.is_blob_column(f),
         )
-        for f in schema
+        for f in reader.schema
     ]
 
 
@@ -94,7 +96,7 @@ def get_info(root: str, path: str) -> models.DatasetInfoResponse:
     plugin = plugins.detect_plugin(reader.schema)
     return models.DatasetInfoResponse(
         row_count=reader.count_rows(),
-        columns=_column_infos(reader.schema),
+        columns=_column_infos(reader),
         plugin=plugin.name if plugin else None,
         filters=plugin.available_filters() if plugin else [],
     )
@@ -103,7 +105,7 @@ def get_info(root: str, path: str) -> models.DatasetInfoResponse:
 @app.get("/api/d/{root}/{path:path}/schema")
 def get_schema(root: str, path: str) -> models.SchemaResponse:
     reader = _open_or_404(root, path)
-    return models.SchemaResponse(columns=_column_infos(reader.schema))
+    return models.SchemaResponse(columns=_column_infos(reader))
 
 
 # -- Generic rows --
@@ -151,7 +153,7 @@ def get_blob(root: str, path: str, offset: int, column: str) -> Response:
     if result is None:
         raise HTTPException(404, f"blob not found: {column}@{offset}")
     data, uri = result
-    mime = formats.detect_mime(data[:2048], uri)
+    mime = core.detect_mime(data[:2048], uri)
     return Response(
         content=data,
         media_type=mime,

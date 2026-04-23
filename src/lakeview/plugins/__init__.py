@@ -5,27 +5,25 @@ from __future__ import annotations
 from typing import ClassVar
 
 import pyarrow as pa
-from lancedb.pydantic import LanceModel
 from pydantic import BaseModel
 
-from lakeview.formats import DatasetReader
+from lakeview.core import DatasetReader
 
 
 class SchemaPlugin:
     """Base class for schema-specific views.
 
-    Sub-classes declare a `SCHEMA` (LanceModel) whose fields are the
-    required columns for this plugin to apply. `matches()` checks the
+    Sub-classes declare ``REQUIRED_COLUMNS`` — a ``frozenset`` of column names
+    that must be present for the plugin to apply. ``matches()`` checks the
     actual dataset schema against those field names.
     """
 
     name: ClassVar[str]
-    SCHEMA: ClassVar[type[LanceModel]]
+    REQUIRED_COLUMNS: ClassVar[frozenset[str]]
 
     @classmethod
     def matches(cls, schema: pa.Schema) -> bool:
-        required = set(cls.SCHEMA.model_fields)
-        return required.issubset({f.name for f in schema})
+        return cls.REQUIRED_COLUMNS.issubset({f.name for f in schema})
 
     def available_filters(self) -> list[str]:
         return ["all"]
@@ -42,7 +40,7 @@ class SchemaPlugin:
         raise NotImplementedError
 
     def detail(self, reader: DatasetReader, key: str) -> BaseModel | None:
-        """Resolve `key` (session id, offset, ...) to a detail record."""
+        """Resolve ``key`` (session id, offset, ...) to a detail record."""
         raise NotImplementedError
 
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from lakeview import formats
-from lakeview.formats import DatasetReader
+from lakeview import core
+from lakeview.core import DatasetReader
 from lakeview.models import DatasetEntry
 from lakeview.root_backends.polaris_client import PolarisClient
 
@@ -46,6 +46,10 @@ class NamespaceRootBackend:
                     kind="namespace",
                 )
             )
+        # Polaris `list_tables` returns names only — the per-table format
+        # lives in `describe_table`, fetching it would be N round-trips.
+        # Label all catalog tables as "lance" here; open_dataset does the
+        # real format → reader lookup when the user clicks in.
         for t in tables:
             entries.append(
                 DatasetEntry(
@@ -54,7 +58,7 @@ class NamespaceRootBackend:
                     kind="lance",
                 )
             )
-        entries.sort(key=lambda e: (e.kind == "lance", e.name))
+        entries.sort(key=lambda e: (e.kind != "namespace", e.name))
         return entries
 
     def open_dataset(self, path: str) -> DatasetReader | None:
@@ -66,9 +70,10 @@ class NamespaceRootBackend:
         if not table:
             return None
         base = table.get("base-location")
-        if not base or table.get("format") != "lance":
+        cls = core.reader_for_format(table.get("format", ""))
+        if not base or cls is None:
             return None
-        return formats.open_dataset(base)
+        return cls.open(base)
 
     def read_file(self, path: str, max_bytes: int) -> tuple[bytes, int] | None:
         # Namespace roots don't expose arbitrary file browsing per the design doc.
