@@ -9,8 +9,10 @@ from pydantic import BaseModel
 
 
 class RootInfo(BaseModel):
-    name: str  # short id used in URLs: "s3", "local"
+    name: str  # short id used in URLs: "s3", "local", "polaris"
     uri: str  # absolute base the root resolves to (for display)
+    kind: str = "storage"  # "storage" or "namespace"
+    driver: str = ""  # "local" / "s3" for storage; "polaris" / ... for namespace
 
 
 class RootsResponse(BaseModel):
@@ -24,7 +26,9 @@ class RootsResponse(BaseModel):
 class DatasetEntry(BaseModel):
     name: str
     path: str  # relative to the current root
-    kind: str  # "lance", "parquet", "delta", "iceberg", "directory", "file"
+    kind: (
+        str  # "lance", "parquet", "delta", "iceberg", "directory", "file", "namespace"
+    )
     row_count: int | None = None
     size: int | None = None  # bytes, only for "file"
 

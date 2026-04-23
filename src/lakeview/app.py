@@ -7,17 +7,14 @@ Run:
 """
 
 import mimetypes
-from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from lakeview import formats, models, plugins, storage
+from lakeview import formats, models, plugins, roots
 
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024  # 5 MB cap on file previews
-# obstore/lance release the GIL during I/O, so threads parallelize effectively.
-_PROBE_WORKERS = 32
 
 app = FastAPI(title="lakeview", version="0.3.0")
 app.add_middleware(
@@ -30,7 +27,10 @@ app.add_middleware(
 
 @app.get("/api/roots")
 def get_roots() -> models.RootsResponse:
-    items = [models.RootInfo(name=n, uri=u) for n, u in storage.roots().items()]
+    items = [
+        models.RootInfo(name=b.name, uri=b.uri, kind=b.kind, driver=b.driver)
+        for b in roots.list_backends()
+    ]
     return models.RootsResponse(
         roots=items,
         default=items[0].name if items else "",
@@ -38,10 +38,10 @@ def get_roots() -> models.RootsResponse:
 
 
 def _open_or_404(root: str, path: str) -> formats.DatasetReader:
-    uri = storage.resolve(root, path.rstrip("/"))
-    if uri is None:
+    backend = roots.get_backend(root)
+    if backend is None:
         raise HTTPException(404, f"unknown root: {root}")
-    reader = formats.open_dataset(uri)
+    reader = backend.open_dataset(path.rstrip("/"))
     if reader is None:
         raise HTTPException(404, f"dataset not found: {root}/{path}")
     return reader
@@ -51,8 +51,11 @@ def _open_or_404(root: str, path: str) -> formats.DatasetReader:
 def get_file(root: str, path: str) -> Response:
     mime, _ = mimetypes.guess_type(path)
     media_type = mime or "application/octet-stream"
+    backend = roots.get_backend(root)
+    if backend is None:
+        raise HTTPException(404, f"unknown root: {root}")
     try:
-        result = storage.read_file(root, path, MAX_PREVIEW_BYTES)
+        result = backend.read_file(path, MAX_PREVIEW_BYTES)
     except ValueError as e:
         raise HTTPException(413, str(e)) from e
     if result is None:
@@ -66,25 +69,8 @@ def get_file(root: str, path: str) -> Response:
 
 @app.get("/api/datasets")
 def get_datasets(root: str, path: str = "") -> models.DatasetListResponse:
-    entries = storage.list_entries(root, path)
-    dir_entries = [e for e in entries if e.kind == "directory"]
-    if dir_entries:
-        parent_store = storage.open_store(root, path)
-
-        def upgrade(entry: models.DatasetEntry) -> None:
-            p = storage.Probe(parent_store, entry.name)
-            cls = formats.detect(p)
-            if cls is None:
-                return
-            uri = storage.resolve(root, entry.path)
-            reader = cls.open(uri) if uri else None
-            if reader is None:
-                return
-            entry.kind = cls.KIND
-            entry.row_count = reader.count_rows()
-
-        with ThreadPoolExecutor(max_workers=_PROBE_WORKERS) as pool:
-            list(pool.map(upgrade, dir_entries))
+    backend = roots.get_backend(root)
+    entries = backend.list_entries(path) if backend else []
     return models.DatasetListResponse(root=root, path=path, datasets=entries)
 
 

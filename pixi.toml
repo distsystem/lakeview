@@ -26,3 +26,17 @@ python-magic = "*"
 
 [pypi-dependencies]
 lakeview = { path = ".", editable = true }
+
+[feature.polaris.dependencies]
+openjdk = "21.*"
+
+[feature.polaris.tasks]
+# One-shot: Polaris + Lakeview backend + frontend, single Ctrl+C tears down all.
+lakeview-up = { cmd = "bash scripts/lakeview_up.sh" }
+# One-shot Polaris only: build JAR if missing, launch, wait for health, bootstrap.
+polaris-up = { cmd = "bash scripts/polaris_up.sh" }
+# One-time: build the Quarkus JAR so polaris-up can skip the gradle dance.
+polaris-build = { cmd = "./gradlew :polaris-server:assemble :polaris-server:quarkusAppPartsBuild", cwd = "../polaris" }
+
+[environments]
+polaris = ["polaris"]

@@ -1,65 +1,25 @@
-"""Storage layer — root-relative browse via obstore.
+"""Low-level obstore helpers keyed off absolute URIs.
 
-Roots are declared at startup from the environment:
-  - ``s3``: ``s3://$S3_BUCKET/$S3_PREFIX`` (when both are set)
-  - ``local``: the server's cwd
-
-Downstream code always works in terms of ``(root, rel)`` pairs. The root
-name maps to a base URI; ``rel`` is joined underneath. Raw schemes and
-double-slashes never enter URLs.
+Consumed by ``StorageRootBackend``. No root concept — just URIs in, data out.
 """
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import obstore as obs
-from dotenv import load_dotenv
 from obstore.store import LocalStore, from_url
 
 from lakeview.models import DatasetEntry
 
-# Auto-load repo-root .env for dev. In prod the orchestrator sets env vars
-# directly so this is a no-op.
-load_dotenv()
 
-
-def _load_roots() -> dict[str, str]:
-    roots: dict[str, str] = {}
-    bucket = os.environ.get("S3_BUCKET")
-    prefix = os.environ.get("S3_PREFIX")
-    if bucket and prefix:
-        roots["s3"] = f"s3://{bucket}/{prefix}"
-    roots["local"] = str(Path.cwd())
-    return roots
-
-
-_ROOTS = _load_roots()
-
-
-def roots() -> dict[str, str]:
-    """Map of configured root names to their absolute base URI."""
-    return dict(_ROOTS)
-
-
-def resolve(root: str, rel: str = "") -> str | None:
-    """Expand a ``(root, rel)`` pair into the absolute URI obstore wants."""
-    base = _ROOTS.get(root)
-    if base is None:
-        return None
+def join(base_uri: str, rel: str = "") -> str:
+    """Append ``rel`` under ``base_uri``; empty and trailing slashes are normalized."""
     rel = rel.strip("/")
-    return f"{base}/{rel}" if rel else base
+    return f"{base_uri}/{rel}" if rel else base_uri
 
 
-def _open_dir(uri: str):
+def open_store_at(uri: str):
+    """Open an obstore rooted at ``uri`` (scheme URI or local path)."""
     return from_url(uri) if "://" in uri else LocalStore(uri)
-
-
-def open_store(root: str, rel: str = ""):
-    """Open an obstore rooted at ``(root, rel)``."""
-    uri = resolve(root, rel)
-    return _open_dir(uri) if uri is not None else None
 
 
 class Probe:
@@ -84,13 +44,11 @@ class Probe:
         return False
 
 
-def list_entries(root: str, rel: str = "") -> list[DatasetEntry]:
-    """List 1 level under ``(root, rel)``. Entry paths are relative to root."""
-    uri = resolve(root, rel)
-    if uri is None:
-        return []
+def list_entries_at(base_uri: str, rel: str = "") -> list[DatasetEntry]:
+    """List 1 level under ``base_uri/rel``. Entry paths are relative to base."""
+    uri = join(base_uri, rel)
     try:
-        store = _open_dir(uri)
+        store = open_store_at(uri)
         result = obs.list_with_delimiter(store)
     except Exception:
         return []
@@ -125,24 +83,22 @@ def list_entries(root: str, rel: str = "") -> list[DatasetEntry]:
     return entries
 
 
-def read_file(root: str, rel: str, max_bytes: int) -> tuple[bytes, int] | None:
-    """Read a file's contents. Returns (bytes, size) or None if not found.
+def read_file_at(base_uri: str, rel: str, max_bytes: int) -> tuple[bytes, int] | None:
+    """Read a file under ``base_uri/rel``. Returns (bytes, size) or None.
 
     Raises ValueError if the file exceeds ``max_bytes``.
     """
     parent_rel, _, name = rel.rpartition("/")
     if not name:
         return None
-    parent_uri = resolve(root, parent_rel)
-    if parent_uri is None:
-        return None
+    parent_uri = join(base_uri, parent_rel)
     try:
-        store = _open_dir(parent_uri)
+        store = open_store_at(parent_uri)
         meta = obs.head(store, name)
     except Exception:
         return None
     size = meta.get("size") or 0
     if size > max_bytes:
-        raise ValueError(f"file too large: {root}/{rel} ({size} > {max_bytes})")
+        raise ValueError(f"file too large: {base_uri}/{rel} ({size} > {max_bytes})")
     data = obs.get(store, name).bytes()
     return bytes(data), size
